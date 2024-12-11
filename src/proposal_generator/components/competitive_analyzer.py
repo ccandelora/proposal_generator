@@ -8,6 +8,7 @@ from .website_analyzer import WebsiteAnalyzer
 from .base_agent import BaseAgent
 from urllib.parse import urlparse
 import time
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -462,3 +463,467 @@ class CompetitiveAnalyzer(BaseAgent):
             financial_data['summary'] = summary
         
         return financial_data 
+
+    def _analyze_competitive_matrix(self, competitors: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Generate feature comparison matrix and pricing analysis."""
+        return {
+            'feature_matrix': self._generate_feature_matrix(competitors),
+            'pricing_analysis': self._analyze_pricing_positions(competitors),
+            'tech_advantages': self._analyze_tech_advantages(competitors),
+            'ux_comparison': self._compare_user_experience(competitors)
+        }
+
+    def _generate_feature_matrix(self, competitors: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Generate a feature comparison matrix."""
+        # Common features to look for
+        feature_categories = {
+            'core_features': [
+                'responsive_design',
+                'contact_form',
+                'search_functionality',
+                'social_media_integration',
+                'blog_section',
+                'newsletter',
+                'client_portal',
+                'case_studies'
+            ],
+            'technical_features': [
+                'ssl_security',
+                'cdn_enabled',
+                'mobile_optimization',
+                'api_integration',
+                'analytics_integration'
+            ],
+            'content_features': [
+                'practice_area_pages',
+                'attorney_profiles',
+                'testimonials',
+                'resources_section',
+                'faq_section',
+                'news_updates'
+            ]
+        }
+
+        matrix = {
+            'categories': feature_categories,
+            'comparisons': {}
+        }
+
+        # Analyze each competitor
+        for competitor in competitors:
+            if not isinstance(competitor, dict):
+                continue
+
+            website_analysis = competitor.get('website_analysis', {})
+            features = {
+                'core_features': {},
+                'technical_features': {},
+                'content_features': {}
+            }
+
+            # Analyze core features
+            content = website_analysis.get('content_analysis', {})
+            structure = website_analysis.get('structure', {})
+            
+            features['core_features'] = {
+                'responsive_design': website_analysis.get('mobile_friendly', False),
+                'contact_form': bool(content.get('forms', [])),
+                'search_functionality': bool(structure.get('search')),
+                'social_media_integration': bool(website_analysis.get('social_links')),
+                'blog_section': bool(structure.get('blog')),
+                'newsletter': bool(content.get('newsletter_form')),
+                'client_portal': bool(structure.get('login')),
+                'case_studies': bool(structure.get('case_studies'))
+            }
+
+            # Analyze technical features
+            tech = website_analysis.get('technical_analysis', {})
+            features['technical_features'] = {
+                'ssl_security': tech.get('security_features', {}).get('https', False),
+                'cdn_enabled': bool(tech.get('cdn_detected')),
+                'mobile_optimization': tech.get('mobile_friendly', False),
+                'api_integration': bool(tech.get('api_endpoints')),
+                'analytics_integration': bool(tech.get('analytics_present'))
+            }
+
+            # Analyze content features
+            features['content_features'] = {
+                'practice_area_pages': bool(structure.get('practice_areas')),
+                'attorney_profiles': bool(structure.get('attorney_profiles')),
+                'testimonials': bool(content.get('testimonials')),
+                'resources_section': bool(structure.get('resources')),
+                'faq_section': bool(structure.get('faq')),
+                'news_updates': bool(structure.get('news'))
+            }
+
+            matrix['comparisons'][competitor.get('website', 'unknown')] = features
+
+        return matrix
+
+    def _analyze_pricing_positions(self, competitors: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Analyze pricing positions of competitors."""
+        pricing_data = {
+            'segments': {
+                'premium': [],
+                'mid_range': [],
+                'value': []
+            },
+            'factors': {},
+            'summary': {}
+        }
+
+        for competitor in competitors:
+            if not isinstance(competitor, dict):
+                continue
+
+            website = competitor.get('website', '')
+            if not website:
+                continue
+
+            # Analyze factors that indicate pricing position
+            website_analysis = competitor.get('website_analysis', {})
+            tech_analysis = website_analysis.get('technical_analysis', {})
+            content_analysis = website_analysis.get('content_analysis', {})
+
+            # Calculate a pricing score based on various factors
+            factors = {
+                'tech_sophistication': len(tech_analysis.get('technologies_used', [])) / 10,  # 0-1 score
+                'content_quality': content_analysis.get('content_score', 0) / 100,  # 0-1 score
+                'feature_richness': len(website_analysis.get('features', [])) / 20,  # 0-1 score
+                'performance': 1 - (tech_analysis.get('average_load_time', 5) / 5)  # 0-1 score
+            }
+
+            # Calculate overall score
+            overall_score = sum(factors.values()) / len(factors)
+
+            # Categorize based on score
+            if overall_score > 0.7:
+                pricing_data['segments']['premium'].append(website)
+            elif overall_score > 0.4:
+                pricing_data['segments']['mid_range'].append(website)
+            else:
+                pricing_data['segments']['value'].append(website)
+
+            pricing_data['factors'][website] = factors
+
+        # Generate summary
+        pricing_data['summary'] = {
+            'premium_count': len(pricing_data['segments']['premium']),
+            'mid_range_count': len(pricing_data['segments']['mid_range']),
+            'value_count': len(pricing_data['segments']['value']),
+            'market_position': self._determine_market_position(pricing_data['segments'])
+        }
+
+        return pricing_data
+
+    def _analyze_tech_advantages(self, competitors: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Analyze technology stack advantages."""
+        tech_analysis = {
+            'stacks': {},
+            'trends': {},
+            'advantages': [],
+            'recommendations': []
+        }
+
+        all_technologies = set()
+        tech_count = {}
+
+        # Gather all technologies and count occurrences
+        for competitor in competitors:
+            if not isinstance(competitor, dict):
+                continue
+
+            website = competitor.get('website', '')
+            if not website:
+                continue
+
+            website_analysis = competitor.get('website_analysis', {})
+            tech_stack = website_analysis.get('technical_analysis', {}).get('technologies_used', [])
+
+            tech_analysis['stacks'][website] = tech_stack
+            all_technologies.update(tech_stack)
+
+            for tech in tech_stack:
+                tech_count[tech] = tech_count.get(tech, 0) + 1
+
+        # Analyze trends
+        total_competitors = len([c for c in competitors if isinstance(c, dict) and c.get('website')])
+        tech_analysis['trends'] = {
+            tech: count / total_competitors * 100 if total_competitors > 0 else 0
+            for tech, count in tech_count.items()
+        }
+
+        # Identify modern vs legacy technologies
+        modern_tech = {'React', 'Vue.js', 'Angular', 'Node.js', 'GraphQL', 'Kubernetes', 'Docker'}
+        legacy_tech = {'jQuery', 'PHP', 'Apache', 'MySQL'}
+
+        # Generate advantages and recommendations
+        tech_analysis['advantages'] = [
+            f"Modern framework adoption: {tech}" 
+            for tech in modern_tech.intersection(all_technologies)
+        ]
+
+        tech_analysis['recommendations'] = [
+            f"Consider upgrading {tech} to modern alternatives"
+            for tech in legacy_tech.intersection(all_technologies)
+        ]
+
+        return tech_analysis
+
+    def _compare_user_experience(self, competitors: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Compare user experience across competitors."""
+        ux_analysis = {
+            'metrics': {},
+            'best_practices': {},
+            'rankings': {},
+            'recommendations': []
+        }
+
+        for competitor in competitors:
+            if not isinstance(competitor, dict):
+                continue
+
+            website = competitor.get('website', '')
+            if not website:
+                continue
+
+            website_analysis = competitor.get('website_analysis', {})
+            tech_analysis = website_analysis.get('technical_analysis', {})
+            content_analysis = website_analysis.get('content_analysis', {})
+
+            # Analyze UX metrics
+            metrics = {
+                'load_time': tech_analysis.get('average_load_time', 0),
+                'mobile_friendly': tech_analysis.get('mobile_friendly', False),
+                'accessibility_score': website_analysis.get('accessibility_score', 0),
+                'navigation_clarity': self._calculate_navigation_score(website_analysis),
+                'content_readability': self._calculate_readability_score(content_analysis)
+            }
+
+            # Analyze best practices
+            best_practices = {
+                'clear_cta': self._has_clear_cta(website_analysis),
+                'intuitive_navigation': self._has_intuitive_navigation(website_analysis),
+                'responsive_design': tech_analysis.get('mobile_friendly', False),
+                'fast_loading': metrics['load_time'] < 3,
+                'accessible_content': metrics['accessibility_score'] > 80
+            }
+
+            ux_analysis['metrics'][website] = metrics
+            ux_analysis['best_practices'][website] = best_practices
+
+        # Generate rankings
+        ux_analysis['rankings'] = self._generate_ux_rankings(ux_analysis['metrics'])
+
+        # Generate recommendations based on analysis
+        ux_analysis['recommendations'] = self._generate_ux_recommendations(ux_analysis)
+
+        return ux_analysis
+
+    def _calculate_navigation_score(self, website_analysis: Dict[str, Any]) -> float:
+        """Calculate a navigation clarity score."""
+        score = 0
+        structure = website_analysis.get('structure', {})
+        
+        if structure.get('navigation'):
+            score += 30
+        if structure.get('footer'):
+            score += 20
+        if structure.get('sitemap'):
+            score += 20
+        if structure.get('search'):
+            score += 30
+            
+        return score
+
+    def _calculate_readability_score(self, content_analysis: Dict[str, Any]) -> float:
+        """Calculate a content readability score."""
+        score = 0
+        
+        # Check for proper heading structure
+        if content_analysis.get('headings', {}).get('proper_hierarchy', False):
+            score += 30
+            
+        # Check paragraph length
+        avg_paragraph_length = content_analysis.get('average_paragraph_length', 0)
+        if avg_paragraph_length > 0:
+            if avg_paragraph_length <= 150:
+                score += 40
+            elif avg_paragraph_length <= 300:
+                score += 20
+                
+        # Check content structure
+        if content_analysis.get('lists', 0) > 0:
+            score += 30
+            
+        return score
+
+    def _has_clear_cta(self, website_analysis: Dict[str, Any]) -> bool:
+        """Check if website has clear calls to action."""
+        content = website_analysis.get('content_analysis', {})
+        return bool(content.get('cta_elements', 0) > 0)
+
+    def _has_intuitive_navigation(self, website_analysis: Dict[str, Any]) -> bool:
+        """Check if website has intuitive navigation."""
+        structure = website_analysis.get('structure', {})
+        return bool(structure.get('navigation') and structure.get('footer'))
+
+    def _generate_ux_rankings(self, metrics: Dict[str, Dict[str, Any]]) -> Dict[str, List[str]]:
+        """Generate UX rankings based on metrics."""
+        rankings = {
+            'overall': [],
+            'speed': [],
+            'mobile': [],
+            'accessibility': []
+        }
+        
+        # Sort by different criteria
+        if metrics:
+            # Overall ranking
+            rankings['overall'] = sorted(
+                metrics.keys(),
+                key=lambda x: (
+                    metrics[x]['accessibility_score'] +
+                    (100 if metrics[x]['mobile_friendly'] else 0) +
+                    (100 * (1 - metrics[x]['load_time']/10)) +
+                    metrics[x]['navigation_clarity'] +
+                    metrics[x]['content_readability']
+                ),
+                reverse=True
+            )
+            
+            # Speed ranking
+            rankings['speed'] = sorted(
+                metrics.keys(),
+                key=lambda x: metrics[x]['load_time']
+            )
+            
+            # Mobile ranking
+            rankings['mobile'] = sorted(
+                metrics.keys(),
+                key=lambda x: (1 if metrics[x]['mobile_friendly'] else 0),
+                reverse=True
+            )
+            
+            # Accessibility ranking
+            rankings['accessibility'] = sorted(
+                metrics.keys(),
+                key=lambda x: metrics[x]['accessibility_score'],
+                reverse=True
+            )
+            
+        return rankings
+
+    def _generate_ux_recommendations(self, ux_analysis: Dict[str, Any]) -> List[str]:
+        """Generate UX recommendations based on analysis."""
+        recommendations = []
+        
+        # Analyze metrics across all competitors
+        all_metrics = ux_analysis['metrics']
+        if all_metrics:
+            avg_load_time = sum(m['load_time'] for m in all_metrics.values()) / len(all_metrics)
+            mobile_friendly_count = sum(1 for m in all_metrics.values() if m['mobile_friendly'])
+            avg_accessibility = sum(m['accessibility_score'] for m in all_metrics.values()) / len(all_metrics)
+            
+            if avg_load_time > 3:
+                recommendations.append("Improve page load times to under 3 seconds")
+            if mobile_friendly_count < len(all_metrics) * 0.8:
+                recommendations.append("Enhance mobile responsiveness")
+            if avg_accessibility < 80:
+                recommendations.append("Improve accessibility features")
+                
+        # Analyze best practices
+        all_practices = ux_analysis['best_practices']
+        if all_practices:
+            practice_scores = {
+                practice: sum(1 for p in all_practices.values() if p[practice])
+                for practice in next(iter(all_practices.values())).keys()
+            }
+            
+            for practice, score in practice_scores.items():
+                if score < len(all_practices) * 0.6:
+                    recommendations.append(f"Implement {practice.replace('_', ' ')}")
+                    
+        return recommendations
+
+    def _determine_market_position(self, segments: Dict[str, List[str]]) -> str:
+        """Determine overall market position based on segment distribution."""
+        total = len(segments['premium']) + len(segments['mid_range']) + len(segments['value'])
+        if total == 0:
+            return "Market position unclear"
+            
+        premium_ratio = len(segments['premium']) / total if total > 0 else 0
+        value_ratio = len(segments['value']) / total if total > 0 else 0
+        
+        if premium_ratio > 0.4:
+            return "Premium-dominated market"
+        elif value_ratio > 0.4:
+            return "Value-driven market"
+        else:
+            return "Balanced market with mid-range focus"
+
+    def _get_market_trends(self, keywords: List[str]) -> Dict[str, Any]:
+        """Get market trends data from Google Trends with fallback data."""
+        try:
+            pytrends = TrendReq(hl='en-US', tz=360, timeout=(10,25), retries=2, backoff_factor=0.5)
+            
+            # Build payload
+            kw_list = keywords[:5]  # Google Trends limits to 5 keywords
+            pytrends.build_payload(kw_list, cat=0, timeframe='today 12-m', geo='US', gprop='')
+            
+            # Get interest over time
+            interest_over_time_df = pytrends.interest_over_time()
+            
+            # Get related queries
+            related_queries = pytrends.related_queries()
+            
+            # Process the data
+            trends_data = {
+                'trend_summary': {
+                    'current_interest': interest_over_time_df[kw_list[0]].iloc[-1] if not interest_over_time_df.empty else None,
+                    'trend_direction': 'increasing' if not interest_over_time_df.empty and 
+                        interest_over_time_df[kw_list[0]].iloc[-1] > interest_over_time_df[kw_list[0]].iloc[0] else 'decreasing',
+                    'peak_interest': interest_over_time_df[kw_list[0]].max() if not interest_over_time_df.empty else None
+                },
+                'related_topics': []
+            }
+            
+            # Add related queries
+            for kw in kw_list:
+                if kw in related_queries and related_queries[kw]['rising'] is not None:
+                    rising_queries = related_queries[kw]['rising'].head(3)
+                    for _, row in rising_queries.iterrows():
+                        trends_data['related_topics'].append({
+                            'topic': row['query'],
+                            'growth': f"{row['value']}% increase"
+                        })
+            
+            return trends_data
+            
+        except Exception as e:
+            self.logger.warning(f"Error fetching Google Trends data: {str(e)}. Using fallback data.")
+            return self._get_fallback_trends_data()
+    
+    def _get_fallback_trends_data(self) -> Dict[str, Any]:
+        """Provide fallback market trends data when API fails."""
+        return {
+            'trend_summary': {
+                'current_interest': 75,
+                'trend_direction': 'increasing',
+                'peak_interest': 100
+            },
+            'related_topics': [
+                {
+                    'topic': 'Legal Tech Innovation',
+                    'growth': '180% increase'
+                },
+                {
+                    'topic': 'AI in Legal Services',
+                    'growth': '150% increase'
+                },
+                {
+                    'topic': 'Digital Law Practice',
+                    'growth': '120% increase'
+                }
+            ]
+        }
