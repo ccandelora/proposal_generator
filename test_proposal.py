@@ -31,7 +31,7 @@ def test_proposal():
     logger.info(f"Industry: {client_brief['industry']}")
     logger.info(f"Location: {client_brief['location']}")
     
-    # Initialize generator
+    # Initialize generator with no template
     generator = ProposalGenerator()
 
     # Generate proposal

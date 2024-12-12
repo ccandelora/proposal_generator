@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ client_name }} - Project Proposal</title>
+    <style>
+        @page {
+            size: letter portrait;
+            margin: 2cm;
+            @top-right {
+                content: "Page " counter(page) " of " counter(pages);
+            }
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 2em;
+            border-bottom: 2px solid #333;
+            padding-bottom: 1em;
+        }
+        .section {
+            margin: 2em 0;
+            page-break-inside: avoid;
+        }
+        h1 {
+            color: #2c3e50;
+            font-size: 24pt;
+        }
+        h2 {
+            color: #34495e;
+            font-size: 18pt;
+            border-bottom: 1px solid #bdc3c7;
+            padding-bottom: 0.5em;
+        }
+        .insight-box {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 1em;
+            margin: 1em 0;
+            border-radius: 4px;
+        }
+        .mockup-image {
+            max-width: 100%;
+            height: auto;
+            margin: 1em 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+        }
+        th, td {
+            padding: 0.5em;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background: #f5f5f5;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 2em;
+            font-size: 10pt;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Project Proposal</h1>
+        <h2>{{ client_name }}</h2>
+        <p>Generated on {{ generation_date }}</p>
+    </div>
+
+    <div class="section">
+        <h2>Project Overview</h2>
+        <p>{{ project_description }}</p>
+        <div class="insight-box">
+            <strong>Industry:</strong> {{ industry }}<br>
+            <strong>Target Market:</strong> {{ target_market }}
+        </div>
+    </div>
+
+    {% if seo_insights %}
+    <div class="section">
+        <h2>SEO Analysis</h2>
+        <div class="insight-box">
+            {% for key, value in seo_insights.items() %}
+            <h3>{{ key|title }}</h3>
+            {% if value is mapping %}
+                {% for subkey, subvalue in value.items() %}
+                <p><strong>{{ subkey|title }}:</strong> {{ subvalue }}</p>
+                {% endfor %}
+            {% else %}
+                <p>{{ value }}</p>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if market_insights %}
+    <div class="section">
+        <h2>Market Analysis</h2>
+        <div class="insight-box">
+            {% for key, value in market_insights.items() %}
+            <h3>{{ key|title }}</h3>
+            {% if value is mapping %}
+                {% for subkey, subvalue in value.items() %}
+                <p><strong>{{ subkey|title }}:</strong> {{ subvalue }}</p>
+                {% endfor %}
+            {% else %}
+                <p>{{ value }}</p>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if content_plan %}
+    <div class="section">
+        <h2>Content Strategy</h2>
+        <div class="insight-box">
+            {% for key, value in content_plan.items() %}
+            <h3>{{ key|title }}</h3>
+            {% if value is sequence and value is not string %}
+                <ul>
+                {% for item in value %}
+                    <li>{{ item }}</li>
+                {% endfor %}
+                </ul>
+            {% else %}
+                <p>{{ value }}</p>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if mockups %}
+    <div class="section">
+        <h2>Design Mockups</h2>
+        {% for device, image_path in mockups.items() %}
+        <div class="mockup-container">
+            <h3>{{ device|title }} View</h3>
+            <img src="{{ image_path }}" alt="{{ device }} mockup" class="mockup-image">
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        <p>Confidential - {{ client_name }} - {{ generation_date }}</p>
+    </div>
+</body>
+</html> 

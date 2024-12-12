@@ -1,0 +1,50 @@
+research_task:
+  description: Research market trends, competitor analysis, and SEO requirements
+  expected_output: Comprehensive research data about market position and SEO opportunities
+  tools:
+    - name: web_search
+      args_schema:
+        type: object
+        properties:
+          query:
+            type: string
+            description: The search query to find relevant information
+    - name: seo_analyzer
+      args_schema:
+        type: object
+        properties:
+          url:
+            type: string
+            description: The URL to analyze for SEO
+
+reporting_task:
+  description: Analyze research data and create a detailed proposal report
+  expected_output: A well-structured report with actionable recommendations
+  tools:
+    - name: document_writer
+      args_schema:
+        type: object
+        properties:
+          content:
+            type: string
+            description: The content to write to the document
+          format:
+            type: string
+            description: The format of the document (markdown, html, etc.)
+
+mockup_generation_task:
+  description: Generate website mockups based on research findings and requirements
+  expected_output: A set of website mockups including desktop and mobile versions
+  tools:
+    - name: mockup_generator
+      args_schema:
+        type: object
+        properties:
+          requirements:
+            type: array
+            description: List of design requirements
+            items:
+              type: string
+          device_type:
+            type: string
+            description: Type of device (desktop, mobile) 

@@ -1,107 +1,102 @@
-import time
-from typing import List, Dict, Any, Optional
+from typing import Dict, List, Any, Optional
 import logging
-import random
-from datetime import datetime, timedelta
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+import random
+import time
+from datetime import datetime
 import whois
+import re
+from crewai import Agent, Task, Crew, Process
+from langchain.tools import Tool
 from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 
-class CompetitorAnalyzer(BaseAgent):
-    """Analyzes competitors and their market positioning."""
-
+class WebsiteAnalyzerAgent(Agent):
+    """Agent specialized in analyzing competitor websites."""
+    
     def __init__(self):
-        """Initialize the competitor analyzer."""
-        super().__init__()
+        super().__init__(
+            name="Website Analyzer",
+            goal="Analyze competitor websites for information and features",
+            backstory="""You are an expert at analyzing websites to extract 
+            valuable competitive information and insights.""",
+            tools=[
+                Tool(
+                    name="analyze_website",
+                    func=self._analyze_website,
+                    description="Analyze website content and features"
+                ),
+                Tool(
+                    name="extract_services",
+                    func=self._extract_services,
+                    description="Extract services offered"
+                ),
+                Tool(
+                    name="get_domain_info",
+                    func=self._get_domain_info,
+                    description="Get domain registration information"
+                )
+            ]
+        )
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
 
-    def _wait_between_requests(self):
-        """Add delay between requests."""
-        delay = random.uniform(3, 5)
-        logger.info(f"Waiting {delay:.1f} seconds between requests...")
-        time.sleep(delay)
-
-    def process(self, competitors: List[Dict[str, Any]], context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Analyze the competitors and generate insights."""
-        if not competitors:
-            logger.warning("No competitors provided for analysis")
-            return self._empty_analysis_result()
-
-        try:
-            analyzed_competitors = []
-            for competitor in competitors:
-                analysis = self._analyze_competitor(competitor)
-                if analysis:
-                    analyzed_competitors.append(analysis)
-
-            if not analyzed_competitors:
-                logger.warning("No competitor analysis results generated")
-                return self._empty_analysis_result()
-
-            return {
-                'competitors': analyzed_competitors,
-                'market_insights': self._generate_market_insights(analyzed_competitors),
-                'keyword_trends': self._analyze_keyword_trends(analyzed_competitors),
-                'market_positioning': self._analyze_market_positioning(analyzed_competitors)
-            }
-        except Exception as e:
-            logger.error(f"Error during competitor analysis: {str(e)}")
-            return self._empty_analysis_result()
-
-    def _analyze_competitor(self, competitor: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Analyze a single competitor."""
+    async def execute_task(self, task: Task) -> Dict[str, Any]:
+        """Execute the website analysis task."""
+        competitor = task.context.get('competitor')
+        
         try:
             website = competitor.get('website', '')
             if not website:
                 return None
 
-            self._wait_between_requests()
+            # Add delay between requests
+            delay = random.uniform(3, 5)
+            time.sleep(delay)
             
-            # Get website info
-            try:
-                response = self.session.get(website, timeout=30)
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                # Extract meta description
-                meta_desc = soup.find('meta', attrs={'name': 'description'})
-                description = meta_desc['content'] if meta_desc else competitor.get('description', '')
-                
-                # Extract services
-                services = self._extract_services(soup)
-                
-                # Get domain info
-                domain_info = self._get_domain_info(website)
-                
-                return {
-                    'name': competitor['name'],
-                    'website': website,
-                    'description': description,
-                    'services': services,
-                    'domain_info': domain_info,
-                    'source': competitor.get('source', 'Unknown')
-                }
-                
-            except Exception as e:
-                logger.error(f"Error analyzing competitor website {website}: {str(e)}")
-                return {
-                    'name': competitor['name'],
-                    'website': website,
-                    'description': competitor.get('description', ''),
-                    'services': [],
-                    'domain_info': {},
-                    'source': competitor.get('source', 'Unknown')
-                }
-                
+            # Analyze website
+            website_data = await self.tools['analyze_website'](website)
+            
+            # Extract services
+            services = await self.tools['extract_services'](website_data.get('soup'))
+            
+            # Get domain info
+            domain_info = await self.tools['get_domain_info'](website)
+            
+            return {
+                'name': competitor.get('name'),
+                'website': website,
+                'description': website_data.get('description', competitor.get('description', '')),
+                'services': services,
+                'domain_info': domain_info,
+                'source': competitor.get('source', 'Unknown')
+            }
+            
         except Exception as e:
-            logger.error(f"Error analyzing competitor: {str(e)}")
+            logger.error(f"Error in website analysis: {str(e)}")
             return None
+
+    def _analyze_website(self, url: str) -> Dict[str, Any]:
+        """Analyze website content."""
+        try:
+            response = self.session.get(url, timeout=30)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Extract meta description
+            meta_desc = soup.find('meta', attrs={'name': 'description'})
+            description = meta_desc['content'] if meta_desc else ''
+            
+            return {
+                'soup': soup,
+                'description': description
+            }
+        except Exception as e:
+            logger.error(f"Error analyzing website {url}: {str(e)}")
+            return {}
 
     def _extract_services(self, soup: BeautifulSoup) -> List[str]:
         """Extract services from website content."""
@@ -138,6 +133,58 @@ class CompetitorAnalyzer(BaseAgent):
             }
         except Exception as e:
             logger.error(f"Error getting domain info for {url}: {str(e)}")
+            return {}
+
+class MarketAnalyzerAgent(Agent):
+    """Agent specialized in analyzing market insights."""
+    
+    def __init__(self):
+        super().__init__(
+            name="Market Analyzer",
+            goal="Analyze market insights from competitor data",
+            backstory="""You are an expert at analyzing market trends and 
+            generating insights from competitor data.""",
+            tools=[
+                Tool(
+                    name="generate_insights",
+                    func=self._generate_market_insights,
+                    description="Generate market insights"
+                ),
+                Tool(
+                    name="analyze_keywords",
+                    func=self._analyze_keyword_trends,
+                    description="Analyze keyword trends"
+                ),
+                Tool(
+                    name="analyze_positioning",
+                    func=self._analyze_market_positioning,
+                    description="Analyze market positioning"
+                )
+            ]
+        )
+
+    async def execute_task(self, task: Task) -> Dict[str, Any]:
+        """Execute the market analysis task."""
+        competitors = task.context.get('competitors', [])
+        
+        try:
+            # Generate market insights
+            insights = await self.tools['generate_insights'](competitors)
+            
+            # Analyze keyword trends
+            trends = await self.tools['analyze_keywords'](competitors)
+            
+            # Analyze market positioning
+            positioning = await self.tools['analyze_positioning'](competitors)
+            
+            return {
+                'market_insights': insights,
+                'keyword_trends': trends,
+                'market_positioning': positioning
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in market analysis: {str(e)}")
             return {}
 
     def _generate_market_insights(self, competitors: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -247,6 +294,65 @@ class CompetitorAnalyzer(BaseAgent):
         except Exception as e:
             logger.error(f"Error analyzing market positioning: {str(e)}")
             return {}
+
+class CompetitorAnalyzer(BaseAgent):
+    """Orchestrates competitor analysis using a crew of specialized agents."""
+    
+    def __init__(self):
+        super().__init__()
+        self.website_analyzer = WebsiteAnalyzerAgent()
+        self.market_analyzer = MarketAnalyzerAgent()
+
+    def process(self, competitors: List[Dict[str, Any]], context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Process competitors using a crew of specialized agents."""
+        if not competitors:
+            logger.warning("No competitors provided for analysis")
+            return self._empty_analysis_result()
+
+        try:
+            # Create the crew
+            crew = Crew(
+                agents=[
+                    self.website_analyzer,
+                    self.market_analyzer
+                ],
+                tasks=[
+                    Task(
+                        description="Analyze competitor websites",
+                        agent=self.website_analyzer,
+                        context={
+                            'competitors': competitors
+                        }
+                    ),
+                    Task(
+                        description="Analyze market insights",
+                        agent=self.market_analyzer,
+                        context={
+                            'competitors': None  # Will be filled from previous task
+                        }
+                    )
+                ],
+                process=Process.sequential  # Tasks must be executed in order
+            )
+
+            # Execute the crew's tasks
+            result = crew.kickoff()
+            
+            # Format the results
+            return self._format_results(result)
+            
+        except Exception as e:
+            logger.error(f"Error in competitor analysis process: {str(e)}")
+            return self._empty_analysis_result()
+
+    def _format_results(self, crew_result: Dict[str, Any]) -> Dict[str, Any]:
+        """Format crew results into expected output structure."""
+        return {
+            'competitors': crew_result.get('competitors', []),
+            'market_insights': crew_result.get('market_insights', {}),
+            'keyword_trends': crew_result.get('keyword_trends', {}),
+            'market_positioning': crew_result.get('market_positioning', {})
+        }
 
     def _empty_analysis_result(self) -> Dict[str, Any]:
         """Return empty analysis result structure."""
