@@ -1,67 +1,40 @@
-crewai[tools]>=0.86.0,<1.0.0
-python-dotenv>=0.19.0
-langchain-google-genai>=0.0.3
-fpdf2>=2.7.0
-markdown>=3.3.7
-html2text>=2020.1.16
-streamlit>=1.18.0
-jinja2>=3.0.0
-langchain>=0.3.1,<0.4.0
-duckduckgo-search>=4.1.1
-google-search-results>=2.4.1
-beautifulsoup4>=4.12.3
-selenium>=4.18.1
-webdriver-manager>=4.0.1
-selenium-stealth>=1.0.6
-scrapy>=2.11.0
-pandas>=2.1.3
-yfinance>=0.2.33
-newsapi-python>=0.2.7
-pytrends>=4.9.0
-ratelimit>=2.2.1
-wikipedia>=1.4.0
-langchain-community>=0.3.1,<0.4.0
-# Website Analysis Tools
-playwright>=1.40.0
-# SEO Analysis
-python-whois>=0.8.0
-requests>=2.31.0
-# Sentiment Analysis
-textblob>=0.17.1
-nltk>=3.8.1
-# Image Processing
-pillow>=10.1.0
-# Performance Metrics
-psutil>=5.9.0
-# Feature Comparison
-tabulate>=0.9.0
-langchain-core>=0.3.15,<0.4.0
-langchain-openai>=0.2.1,<0.3.0
-tiktoken>=0.7.0,<0.8.0
-langsmith>=0.1.17,<0.2.0
-# Testing
-pytest
-pytest-cov
-pytest-asyncio
-# Web Interface
-flask>=2.0.0
-flask-caching>=2.0.0
-reportlab>=4.0.0
-python-pptx>=0.6.21
-jinja2>=3.0.0
-google-generativeai>=0.3.0
-crewai>=0.1.0
-pydantic>=2.0.0
-selenium>=4.0.0
-beautifulsoup4>=4.9.0
-requests>=2.25.0
-python-dotenv>=0.19.0
-webdriver_manager>=3.8.0
-pandas>=1.3.0
-numpy>=1.21.0
-scikit-learn>=0.24.0
-nltk>=3.6.0
-pillow>=8.0.0
-python-docx>=0.8.11
-# Chrome WebDriver
-chromedriver-autoinstaller>=0.6.3
+# Core dependencies
+quart==0.18.4
+flask-caching==2.0.2
+pydantic>=2.7.4,<3.0.0
+python-dotenv==1.0.0
+litellm==1.30.3
+
+# Google API dependencies
+google-generativeai>=0.8.0,<0.9.0
+langchain-google-genai==2.0.7
+google-api-python-client==2.108.0
+
+# HTTP and networking
+requests==2.31.0
+aiohttp==3.9.1
+httpx==0.25.2
+
+# Web scraping and parsing
+beautifulsoup4==4.12.2
+
+# Authentication and security
+python-jose==3.3.0
+
+# Document processing
+python-pptx==0.6.23
+reportlab==4.1.0
+
+# Data visualization
+plotly==5.18.0
+pandas==2.1.4
+networkx==3.2.1
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+black==23.11.0
+isort==5.12.0
+mypy==1.7.1
+flake8==6.1.0

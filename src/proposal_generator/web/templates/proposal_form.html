@@ -6,6 +6,8 @@
     <title>Proposal Generator</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         .form-container {
             max-width: 800px;
@@ -73,6 +75,404 @@
             content: "✓";
             margin-right: 0.5rem;
         }
+        .agent-progress {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .tasks-list {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.5rem;
+        }
+
+        .task-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.25rem 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .task-item:last-child {
+            border-bottom: none;
+        }
+
+        .task-status {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+        }
+
+        .task-status.pending {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .task-status.in-progress {
+            background: #cff4fc;
+            color: #055160;
+        }
+
+        .task-status.completed {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .task-status.error {
+            background: #f8d7da;
+            color: #842029;
+        }
+
+        .dependency-graph {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .node {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .node:hover {
+            transform: scale(1.1);
+        }
+
+        .node-label {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .link {
+            stroke-opacity: 0.4;
+            stroke-width: 2;
+            transition: all 0.3s ease;
+        }
+
+        .link:hover {
+            stroke-opacity: 1;
+            stroke-width: 3;
+        }
+
+        .task-details {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: none;
+            z-index: 1000;
+        }
+
+        .task-metrics {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .metric-card {
+            background: #fff;
+            border-radius: 4px;
+            padding: 0.5rem;
+            flex: 1;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .metric-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .metric-label {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+        }
+
+        .timeline {
+            position: relative;
+            margin-top: 2rem;
+            padding-top: 1rem;
+        }
+
+        .timeline-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: #e0e0e0;
+        }
+
+        .timeline-marker {
+            position: absolute;
+            top: -5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+        }
+
+        .timeline-marker.current {
+            background: #e74c3c;
+        }
+
+        .timeline-label {
+            position: absolute;
+            top: 10px;
+            transform: translateX(-50%);
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .timeline-container {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .timeline-item {
+            padding: 0.5rem;
+            border-radius: 4px;
+        }
+
+        .timeline-item.critical-path {
+            border: 2px solid #dc3545;
+        }
+
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.25rem;
+        }
+
+        .task-badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.4rem;
+            border-radius: 10px;
+        }
+
+        .progress-bar-container {
+            height: 4px;
+            background: #e9ecef;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--progress-color);
+            transition: width 0.3s ease;
+        }
+
+        .dependency-arrows {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .dependency-arrow {
+            fill: none;
+            stroke: #95a5a6;
+            stroke-width: 1.5;
+        }
+
+        .dependency-arrow.critical-path {
+            stroke: #dc3545;
+            stroke-width: 2;
+        }
+
+        .timeline-controls {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+        }
+
+        .task-tooltip {
+            padding: 0.5rem;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .critical-path-badge {
+            background: #dc3545;
+            color: white;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+        }
+
+        /* Timeline Enhancements */
+        .timeline-container {
+            background: linear-gradient(to right bottom, #ffffff, #f8f9fa);
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .timeline-item {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .timeline-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .timeline-item.critical-path {
+            border: 2px solid #dc3545;
+            background: linear-gradient(to right, #fff5f5, #ffffff);
+        }
+
+        .task-header {
+            padding: 0.5rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .task-badge {
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+        }
+
+        /* Dependency Graph Enhancements */
+        .dependency-graph {
+            background: linear-gradient(to right bottom, #ffffff, #f8f9fa);
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .node circle {
+            transition: all 0.3s ease;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+        }
+
+        .node:hover circle {
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+        }
+
+        .node-label {
+            font-family: 'Inter', -apple-system, system-ui, sans-serif;
+            font-weight: 500;
+            fill: #2d3748;
+        }
+
+        .link {
+            stroke-dasharray: 5,5;
+            animation: dash 20s linear infinite;
+        }
+
+        @keyframes dash {
+            to {
+                stroke-dashoffset: 1000;
+            }
+        }
+
+        /* Task Details Popup */
+        .task-details {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            padding: 1.25rem;
+            min-width: 300px;
+            border: none;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .task-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .metric-card {
+            background: linear-gradient(to bottom right, #f8f9fa, #ffffff);
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 0.75rem;
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .metric-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Progress Bars */
+        .progress {
+            height: 0.5rem;
+            background: #edf2f7;
+            border-radius: 1rem;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            background: linear-gradient(to right, #4299e1, #667eea);
+            transition: width 0.6s ease;
+        }
+
+        /* Status Badges */
+        .badge {
+            padding: 0.35em 0.65em;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-radius: 6px;
+        }
+
+        .badge.bg-success { background: linear-gradient(45deg, #48bb78, #38a169) !important; }
+        .badge.bg-info { background: linear-gradient(45deg, #4299e1, #3182ce) !important; }
+        .badge.bg-warning { background: linear-gradient(45deg, #ecc94b, #d69e2e) !important; }
+        .badge.bg-danger { background: linear-gradient(45deg, #f56565, #e53e3e) !important; }
+
+        /* Critical Path Visualization */
+        .critical-path-list {
+            background: linear-gradient(to right bottom, #fff5f5, #fff);
+            border-radius: 12px;
+            padding: 1rem;
     </style>
 </head>
 <body>
@@ -216,6 +616,121 @@
                         <option value="flexible">Flexible</option>
                     </select>
                 </div>
+
+                <div class="mb-4">
+                    <h3>Competitor Analysis</h3>
+                    <div class="mb-3">
+                        <label class="form-label">Direct Competitors</label>
+                        <div class="competitor-list" id="competitorList">
+                            <div class="competitor-entry mb-2">
+                                <input type="url" class="form-control" name="competitors[]" placeholder="Competitor website URL">
+                                <input type="text" class="form-control mt-1" name="competitor_notes[]" placeholder="Notes about this competitor">
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="addCompetitor()">Add Another Competitor</button>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h3>Design Preferences</h3>
+                    <div class="mb-3">
+                        <label class="form-label">Design Style</label>
+                        <select class="form-select" name="design_style">
+                            <option value="modern">Modern & Minimal</option>
+                            <option value="corporate">Corporate & Professional</option>
+                            <option value="creative">Creative & Bold</option>
+                            <option value="traditional">Traditional & Classic</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Color Preferences</label>
+                        <input type="text" class="form-control" name="color_preferences" placeholder="e.g., blue and white, earth tones">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Brand Assets</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="brand_assets[]" value="logo">
+                            <label class="form-check-label">Logo Design</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="brand_assets[]" value="icons">
+                            <label class="form-check-label">Custom Icons</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="brand_assets[]" value="illustrations">
+                            <label class="form-check-label">Custom Illustrations</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h3>Technical Requirements</h3>
+                    <div class="mb-3">
+                        <label class="form-label">Technology Stack Preferences</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="tech_stack[]" value="react">
+                            <label class="form-check-label">React</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="tech_stack[]" value="node">
+                            <label class="form-check-label">Node.js</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="tech_stack[]" value="python">
+                            <label class="form-check-label">Python</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Integration Requirements</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="integrations[]" value="crm">
+                            <label class="form-check-label">CRM System</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="integrations[]" value="payment">
+                            <label class="form-check-label">Payment Gateway</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="integrations[]" value="analytics">
+                            <label class="form-check-label">Analytics Platform</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h3>AI & Optimization Preferences</h3>
+                    <div class="mb-3">
+                        <label class="form-label">AI Features</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="ai_features[]" value="recommendations">
+                            <label class="form-check-label">Product Recommendations</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="ai_features[]" value="personalization">
+                            <label class="form-check-label">Content Personalization</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="ai_features[]" value="chatbot">
+                            <label class="form-check-label">AI Chatbot</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Optimization Goals</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="optimization_goals[]" value="performance">
+                            <label class="form-check-label">Performance Optimization</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="optimization_goals[]" value="conversion">
+                            <label class="form-check-label">Conversion Rate Optimization</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="optimization_goals[]" value="seo">
+                            <label class="form-check-label">SEO Optimization</label>
+                        </div>
+                    </div>
+                </div>
+
                 <button type="submit" class="btn btn-primary">Generate Proposal</button>
             </form>
             
@@ -238,6 +753,126 @@
             <div id="resultContainer" class="mt-4" style="display: none;">
                 <h3>Generated Proposal</h3>
                 <div id="proposalResult" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="expertiseVisualization" class="mt-4" style="display: none;">
+        <h3>Agent Expertise Analysis</h3>
+        <div class="row">
+            <div class="col-md-6">
+                <div id="skillRadar"></div>
+            </div>
+            <div class="col-md-6">
+                <div id="domainHeatmap"></div>
+            </div>
+        </div>
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div id="experienceTimeline"></div>
+            </div>
+        </div>
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div id="expertiseNetwork"></div>
+            </div>
+            <div class="col-md-6">
+                <div id="specializationSunburst"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="agentResults" class="mt-4" style="display: none;">
+        <div class="competitor-analysis-results mb-4">
+            <h4>Competitor Analysis</h4>
+            <div id="competitorAnalysis"></div>
+        </div>
+        
+        <div class="design-results mb-4">
+            <h4>Design Assets</h4>
+            <div id="designAssets"></div>
+        </div>
+        
+        <div class="code-results mb-4">
+            <h4>Technical Implementation</h4>
+            <div id="codeAssets"></div>
+        </div>
+        
+        <div class="ai-insights mb-4">
+            <h4>AI Insights & Recommendations</h4>
+            <div id="aiInsights"></div>
+        </div>
+    </div>
+
+    <div id="agentProgress" class="mt-4" style="display: none;">
+        <h3>Agent Progress</h3>
+        
+        <!-- Competitor Analysis Agent -->
+        <div class="agent-progress mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5>Competitor Analysis</h5>
+                <span class="badge bg-primary" id="competitorAnalysisStatus">Pending</span>
+            </div>
+            <div class="progress mb-2">
+                <div id="competitorAnalysisProgress" class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="tasks-list" id="competitorAnalysisTasks"></div>
+        </div>
+        
+        <!-- Design Agent -->
+        <div class="agent-progress mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5>Design Generation</h5>
+                <span class="badge bg-primary" id="designStatus">Pending</span>
+            </div>
+            <div class="progress mb-2">
+                <div id="designProgress" class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="tasks-list" id="designTasks"></div>
+        </div>
+        
+        <!-- Coding Agent -->
+        <div class="agent-progress mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5>Code Generation</h5>
+                <span class="badge bg-primary" id="codeStatus">Pending</span>
+            </div>
+            <div class="progress mb-2">
+                <div id="codeProgress" class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="tasks-list" id="codeTasks"></div>
+        </div>
+        
+        <!-- AI Orchestration Agent -->
+        <div class="agent-progress mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5>AI Analysis</h5>
+                <span class="badge bg-primary" id="aiStatus">Pending</span>
+            </div>
+            <div class="progress mb-2">
+                <div id="aiProgress" class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+            <div class="tasks-list" id="aiTasks"></div>
+        </div>
+
+        <div class="task-dependencies mb-4">
+            <h4>Task Dependencies</h4>
+            <div id="dependencyGraph"></div>
+        </div>
+
+        <div class="critical-path mb-3">
+            <h5>Critical Path</h5>
+            <div id="criticalPathList" class="list-group"></div>
+        </div>
+
+        <div class="timeline-container mb-4">
+            <h4>Project Timeline</h4>
+            <div id="timelineChart"></div>
+            <div class="timeline-controls mt-2">
+                <button class="btn btn-sm btn-outline-primary" onclick="zoomTimeline('hour')">Hour</button>
+                <button class="btn btn-sm btn-outline-primary" onclick="zoomTimeline('day')">Day</button>
+                <button class="btn btn-sm btn-outline-primary" onclick="zoomTimeline('week')">Week</button>
+                <button class="btn btn-sm btn-primary" onclick="resetTimelineZoom()">Reset</button>
             </div>
         </div>
     </div>
@@ -280,6 +915,62 @@
             }
         }
 
+        async function updateProgress() {
+            try {
+                const response = await fetch('/api/progress');
+                const data = await response.json();
+                
+                // Update progress bar
+                const progressBar = document.getElementById('progress-bar');
+                progressBar.style.width = `${data.overall_progress}%`;
+                
+                // Update status
+                document.getElementById('status-text').textContent = 
+                    `${data.current_phase}: ${data.overall_progress.toFixed(1)}%`;
+                
+                // Update phase progress
+                const phaseProgress = document.getElementById('phase-progress');
+                phaseProgress.innerHTML = data.phase_summaries.map(phase => `
+                    <div class="phase-item">
+                        <div class="phase-name">${phase.phase}</div>
+                        <div class="progress">
+                            <div class="progress-bar" style="width: ${phase.progress}%"></div>
+                        </div>
+                        <div class="phase-tasks">
+                            ${phase.active_tasks.map(task => `
+                                <div class="task active">${task}</div>
+                            `).join('')}
+                            ${phase.completed_tasks.map(task => `
+                                <div class="task completed">${task}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('');
+                
+                // Update timing information
+                if (data.estimated_completion) {
+                    document.getElementById('timing-info').textContent = 
+                        `Estimated completion: ${new Date(data.estimated_completion).toLocaleTimeString()}`;
+                }
+                
+                // Show recent messages
+                document.getElementById('status-messages').innerHTML = 
+                    data.recent_messages.map(msg => `
+                        <div class="status-message">
+                            <span class="time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+                            <span class="message">${msg.message}</span>
+                        </div>
+                    `).join('');
+                
+                // Continue updating if not complete
+                if (data.overall_progress < 100) {
+                    setTimeout(updateProgress, 1000);
+                }
+            } catch (error) {
+                console.error('Error updating progress:', error);
+            }
+        }
+
         document.getElementById('proposalForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -299,7 +990,7 @@
                     industry: formData.get('industry'),
                     target_market: formData.get('target_market'),
                     website: formData.get('website'),
-                    competitors: formData.get('competitors').split('\n').filter(url => url.trim()),
+                    competitors: Array.from(formData.getAll('competitors[]')).filter(url => url.trim()),
                     project_description: formData.get('project_description'),
                     requirements: {
                         features: Array.from(formData.getAll('features')),
@@ -320,7 +1011,7 @@
                         business_name: formData.get('business_name'),
                         industry: formData.get('industry'),
                         website: formData.get('website'),
-                        competitors: formData.get('competitors').split('\n').filter(url => url.trim()),
+                        competitors: Array.from(formData.getAll('competitors[]')).filter(url => url.trim()),
                         project_description: formData.get('project_description'),
                         features: Array.from(formData.getAll('features')),
                         goals: Array.from(formData.getAll('goals')),
@@ -349,12 +1040,23 @@
                     throw new Error(result.error || `HTTP error! status: ${response.status}`);
                 }
                 
-                // Convert markdown to HTML
-                const converter = new showdown.Converter();
-                const htmlContent = converter.makeHtml(result.data.content);
-                
                 // Display the proposal with enhanced metrics
                 document.getElementById('resultContainer').style.display = 'block';
+                
+                if (result.error) {
+                    document.getElementById('proposalResult').innerHTML = `
+                        <div class="alert alert-danger">
+                            <h4>Error Generating Proposal</h4>
+                            <p>${result.error}</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Convert markdown to HTML
+                const converter = new showdown.Converter();
+                const htmlContent = converter.makeHtml(result.data?.content || '');
+                
                 document.getElementById('proposalResult').innerHTML = `
                     <div class="alert alert-success">
                         <h4>Proposal Generated Successfully!</h4>
@@ -364,54 +1066,41 @@
                         ${htmlContent}
                     </div>
                     <div class="metrics mt-4">
-                        <h5>Content Metrics:</h5>
+                        <h5>Generation Metrics:</h5>
                         <div class="row">
-                            <div class="col-md-6">
-                                <h6>Content Quality</h6>
+                            <div class="col-md-4">
+                                <h6>Performance</h6>
                                 <ul>
-                                    <li>Word Count: ${result.data.metadata.content_metrics.word_count || 0}</li>
-                                    <li>Readability Score: ${((result.data.metadata.content_metrics.readability_score || 0) * 100).toFixed(1)}%</li>
-                                    <li>Quality Score: ${((result.data.metadata.content_metrics.quality_score || 0) * 100).toFixed(1)}%</li>
+                                    <li>Total Time: ${result.data?.metrics?.completion_time?.toFixed(2) || 0}s</li>
+                                    <li>Research: ${result.data?.metrics?.task_durations?.research?.toFixed(2) || 0}s</li>
+                                    <li>Analysis: ${result.data?.metrics?.task_durations?.analysis?.toFixed(2) || 0}s</li>
+                                    <li>Writing: ${result.data?.metrics?.task_durations?.writing?.toFixed(2) || 0}s</li>
                                 </ul>
                             </div>
-                            <div class="col-md-6">
-                                <h6>SEO Analysis</h6>
+                            <div class="col-md-4">
+                                <h6>Research Insights</h6>
                                 <ul>
-                                    <li>Keyword Optimization: ${((result.data.metadata.content_metrics.seo_metrics?.keyword_optimization || 0) * 100).toFixed(1)}%</li>
-                                    <li>Technical Score: ${((result.data.metadata.content_metrics.technical_complexity || 0) * 100).toFixed(1)}%</li>
-                                    <li>Uniqueness Score: ${((result.data.metadata.content_metrics.uniqueness_score || 0) * 100).toFixed(1)}%</li>
+                                    <li>Competitors Analyzed: ${result.data?.research?.competitor_analysis?.count || 0}</li>
+                                    <li>Market Trends: ${result.data?.research?.market_trends?.length || 0}</li>
+                                    <li>SEO Opportunities: ${Object.keys(result.data?.research?.seo_opportunities || {}).length}</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-4">
+                                <h6>Technical Analysis</h6>
+                                <ul>
+                                    <li>Requirements: ${Object.keys(result.data?.analysis?.requirements || {}).length}</li>
+                                    <li>Recommendations: ${result.data?.analysis?.recommendations?.length || 0}</li>
+                                    <li>Tech Stack Components: ${Object.keys(result.data?.analysis?.tech_stack || {}).length}</li>
                                 </ul>
                             </div>
                         </div>
-                        ${result.data.recommendations ? `
-                            <div class="mt-3">
-                                <h6>Key Recommendations:</h6>
-                                <ul>
-                                    ${result.data.recommendations.map(rec => `<li>${rec}</li>`).join('')}
-                                </ul>
-                            </div>
-                        ` : ''}
-                        ${result.data.metadata.content_metrics.roi_metrics ? `
-                            <div class="mt-3">
-                                <h6>ROI Projections:</h6>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h7>Traffic Growth</h7>
-                                        <ul>
-                                            <li>Organic Growth: ${result.data.metadata.content_metrics.roi_metrics.traffic_potential.organic_growth}</li>
-                                            <li>Mobile Traffic: ${result.data.metadata.content_metrics.roi_metrics.traffic_potential.mobile_traffic}</li>
-                                        </ul>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <h7>Conversion Potential</h7>
-                                        <ul>
-                                            <li>Lead Generation: ${result.data.metadata.content_metrics.roi_metrics.conversion_potential.lead_generation}</li>
-                                            <li>Conversion Rate: ${result.data.metadata.content_metrics.roi_metrics.conversion_potential.conversion_rate}</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        ` : ''}
+                        
+                        <div class="mt-3">
+                            <h6>Key Recommendations:</h6>
+                            <ul>
+                                ${(result.data?.analysis?.recommendations || []).map(rec => `<li>${rec}</li>`).join('')}
+                            </ul>
+                        </div>
                     </div>
                 `;
                 
@@ -430,6 +1119,689 @@
                 clearInterval(progressInterval);
             }
         });
+
+        async function updateExpertiseVisualization() {
+            try {
+                const response = await fetch('/expertise-visualization');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Show visualization container
+                    document.getElementById('expertiseVisualization').style.display = 'block';
+                    
+                    // Plot visualizations
+                    Plotly.newPlot('skillRadar', data.data.skill_radar.data, data.data.skill_radar.layout);
+                    Plotly.newPlot('domainHeatmap', data.data.domain_heatmap.data, data.data.domain_heatmap.layout);
+                    Plotly.newPlot('experienceTimeline', data.data.experience_timeline.data, data.data.experience_timeline.layout);
+                    Plotly.newPlot('expertiseNetwork', data.data.expertise_network.data, data.data.expertise_network.layout);
+                    Plotly.newPlot('specializationSunburst', data.data.specialization_sunburst.data, data.data.specialization_sunburst.layout);
+                }
+            } catch (error) {
+                console.error('Error updating expertise visualization:', error);
+            }
+        }
+
+        // Update visualizations periodically
+        setInterval(updateExpertiseVisualization, 30000);  // Update every 30 seconds
+
+        async function displayAgentResults(results) {
+            const agentResults = document.getElementById('agentResults');
+            agentResults.style.display = 'block';
+            
+            // Display competitor analysis
+            if (results.competitor_analysis) {
+                const competitorAnalysis = document.getElementById('competitorAnalysis');
+                competitorAnalysis.innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h5>Market Position</h5>
+                            ${generateCompetitorChart(results.competitor_analysis)}
+                            <h5 class="mt-3">Key Differentiators</h5>
+                            ${generateDifferentiatorsList(results.competitor_analysis)}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Display design assets
+            if (results.design_assets) {
+                const designAssets = document.getElementById('designAssets');
+                designAssets.innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h5>Design System</h5>
+                            ${generateDesignSystem(results.design_assets)}
+                            <h5 class="mt-3">Mockups</h5>
+                            ${generateMockupGallery(results.design_assets)}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Display code assets
+            if (results.code_assets) {
+                const codeAssets = document.getElementById('codeAssets');
+                codeAssets.innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h5>Architecture</h5>
+                            ${generateArchitectureDiagram(results.code_assets)}
+                            <h5 class="mt-3">Technical Specifications</h5>
+                            ${generateTechSpecs(results.code_assets)}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Display AI insights
+            if (results.ai_insights) {
+                const aiInsights = document.getElementById('aiInsights');
+                aiInsights.innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h5>Recommendations</h5>
+                            ${generateRecommendations(results.ai_insights)}
+                            <h5 class="mt-3">Predictions</h5>
+                            ${generatePredictions(results.ai_insights)}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Helper functions for generating visualizations
+        function generateCompetitorChart(data) {
+            // Implement competitor visualization
+        }
+
+        function generateDifferentiatorsList(data) {
+            // Implement differentiator list
+        }
+
+        function generateDesignSystem(data) {
+            // Implement design system display
+        }
+
+        function generateMockupGallery(data) {
+            // Implement mockup gallery
+        }
+
+        function generateArchitectureDiagram(data) {
+            // Implement architecture diagram
+        }
+
+        function generateTechSpecs(data) {
+            // Implement tech specs display
+        }
+
+        function generateRecommendations(data) {
+            // Implement recommendations display
+        }
+
+        function generatePredictions(data) {
+            // Implement predictions display
+        }
+
+        function createDependencyGraph(dependencies, taskPriorities, criticalPath) {
+            const width = 800;
+            const height = 500;
+            
+            // Clear existing graph
+            d3.select("#dependencyGraph").html("");
+            
+            const svg = d3.select("#dependencyGraph")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .attr("class", "dependency-graph");
+            
+            // Add zoom behavior
+            const zoom = d3.zoom()
+                .scaleExtent([0.5, 2])
+                .on("zoom", (event) => {
+                    g.attr("transform", event.transform);
+                });
+            
+            svg.call(zoom);
+            
+            const g = svg.append("g");
+            
+            // Add arrow marker
+            svg.append("defs").append("marker")
+                .attr("id", "arrowhead")
+                .attr("viewBox", "-0 -5 10 10")
+                .attr("refX", 20)
+                .attr("refY", 0)
+                .attr("orient", "auto")
+                .attr("markerWidth", 8)
+                .attr("markerHeight", 8)
+                .append("path")
+                .attr("d", "M 0,-5 L 10,0 L 0,5")
+                .attr("fill", "#999");
+            
+            // Create graph data
+            const nodes = [];
+            const links = [];
+            const nodeMap = new Map();
+            
+            Object.entries(dependencies).forEach(([task, deps]) => {
+                if (!nodeMap.has(task)) {
+                    const node = {
+                        id: task,
+                        status: getTaskStatus(task),
+                        priority: taskPriorities[task]?.priority,
+                        onCriticalPath: criticalPath.includes(task)
+                    };
+                    nodes.push(node);
+                    nodeMap.set(task, node);
+                }
+                deps.forEach(dep => {
+                    if (!nodeMap.has(dep)) {
+                        const node = {
+                            id: dep,
+                            status: getTaskStatus(dep),
+                            priority: taskPriorities[dep]?.priority,
+                            onCriticalPath: criticalPath.includes(dep)
+                        };
+                        nodes.push(node);
+                        nodeMap.set(dep, node);
+                    }
+                    links.push({
+                        source: dep,
+                        target: task,
+                        isCritical: criticalPath.includes(dep) && criticalPath.includes(task)
+                    });
+                });
+            });
+            
+            // Create force simulation
+            const simulation = d3.forceSimulation(nodes)
+                .force("link", d3.forceLink(links).id(d => d.id).distance(100))
+                .force("charge", d3.forceManyBody().strength(-300))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("collision", d3.forceCollide().radius(50));
+            
+            // Create links
+            const link = g.append("g")
+                .selectAll("line")
+                .data(links)
+                .join("line")
+                .attr("class", "link")
+                .attr("stroke", d => d.isCritical ? "#e74c3c" : "#999")
+                .attr("marker-end", "url(#arrowhead)");
+            
+            // Create nodes
+            const node = g.append("g")
+                .selectAll("g")
+                .data(nodes)
+                .join("g")
+                .attr("class", "node")
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended));
+            
+            // Add circles to nodes
+            node.append("circle")
+                .attr("r", d => d.priority === 'high' ? 12 : 10)
+                .attr("fill", d => getNodeColor(d))
+                .attr("stroke", d => d.onCriticalPath ? "#e74c3c" : "none")
+                .attr("stroke-width", 2);
+            
+            // Add labels
+            node.append("text")
+                .attr("class", "node-label")
+                .attr("x", 15)
+                .attr("y", 5)
+                .text(d => d.id);
+            
+            // Add priority indicators
+            node.append("text")
+                .attr("class", "priority-label")
+                .attr("x", -5)
+                .attr("y", -15)
+                .text(d => d.priority.charAt(0).toUpperCase());
+            
+            // Add hover interaction
+            node.on("mouseover", showTaskDetails)
+                .on("mouseout", hideTaskDetails);
+            
+            // Update positions
+            simulation.on("tick", () => {
+                link
+                    .attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+                
+                node.attr("transform", d => `translate(${d.x},${d.y})`);
+            });
+            
+            // Drag functions
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+            
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+            
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+            
+            // Task details popup
+            function showTaskDetails(event, d) {
+                const details = d3.select("body").append("div")
+                    .attr("class", "task-details")
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY + 10) + "px")
+                    .style("display", "block");
+                
+                details.html(`
+                    <h6>${d.id}</h6>
+                    <div>Status: ${d.status}</div>
+                    <div>Priority: ${d.priority}</div>
+                    <div>Critical Path: ${d.onCriticalPath ? "Yes" : "No"}</div>
+                    <div class="task-metrics">
+                        <div class="metric-card">
+                            <div class="metric-value">${taskPriorities[d.id]?.score || 0}</div>
+                            <div class="metric-label">Priority Score</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">${taskPriorities[d.id]?.factors?.blocking_tasks || 0}</div>
+                            <div class="metric-label">Blocking Tasks</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">${Math.round(taskPriorities[d.id]?.factors?.slack_time || 0)}s</div>
+                            <div class="metric-label">Slack Time</div>
+                        </div>
+                    </div>
+                `);
+            }
+            
+            function hideTaskDetails() {
+                d3.selectAll(".task-details").remove();
+            }
+        }
+
+        function getStatusColor(status) {
+            switch (status.toLowerCase()) {
+                case 'completed': return '#28a745';
+                case 'in progress': return '#17a2b8';
+                case 'error': return '#dc3545';
+                case 'waiting': return '#ffc107';
+                default: return '#6c757d';
+            }
+        }
+
+        async function updateAgentProgress() {
+            try {
+                const response = await fetch('/api/agent-progress');
+                const data = await response.json();
+                
+                // Show progress container
+                document.getElementById('agentProgress').style.display = 'block';
+                
+                // Update critical path and dependency graph
+                updateCriticalPath(data.critical_path, data.task_priorities);
+                createDependencyGraph(
+                    data.task_dependencies,
+                    data.task_priorities,
+                    data.critical_path
+                );
+                
+                // Update estimated completion time
+                const estimatedCompletion = new Date(data.estimated_completion);
+                document.getElementById('estimatedCompletion').textContent = 
+                    `Estimated Completion: ${estimatedCompletion.toLocaleTimeString()}`;
+                
+                // Update each agent's progress
+                updateAgentSection('competitorAnalysis', data.competitor_agent);
+                updateAgentSection('design', data.design_agent);
+                updateAgentSection('code', data.code_agent);
+                updateAgentSection('ai', data.ai_agent);
+                
+                // Continue updating if any agent is still working
+                if (data.overall_status !== 'completed') {
+                    setTimeout(updateAgentProgress, 1000);
+                }
+            } catch (error) {
+                console.error('Error updating agent progress:', error);
+            }
+        }
+
+        function updateAgentSection(agentId, agentData) {
+            // Update progress bar
+            const progressBar = document.getElementById(`${agentId}Progress`);
+            progressBar.style.width = `${agentData.progress}%`;
+            
+            // Update status badge
+            const statusBadge = document.getElementById(`${agentId}Status`);
+            statusBadge.textContent = agentData.status;
+            updateStatusBadgeStyle(statusBadge, agentData.status);
+            
+            // Update tasks list
+            const tasksList = document.getElementById(`${agentId}Tasks`);
+            tasksList.innerHTML = agentData.tasks.map(task => `
+                <div class="task-item">
+                    <span>${task.name}</span>
+                    <span class="task-status ${task.status.toLowerCase()}">${task.status}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateStatusBadgeStyle(badge, status) {
+            // Remove existing status classes
+            badge.classList.remove('bg-primary', 'bg-success', 'bg-danger', 'bg-warning', 'bg-info');
+            
+            // Add appropriate status class
+            switch (status.toLowerCase()) {
+                case 'completed':
+                    badge.classList.add('bg-success');
+                    break;
+                case 'in progress':
+                    badge.classList.add('bg-info');
+                    break;
+                case 'error':
+                    badge.classList.add('bg-danger');
+                    break;
+                case 'waiting':
+                    badge.classList.add('bg-warning');
+                    break;
+                default:
+                    badge.classList.add('bg-primary');
+            }
+        }
+
+        // Start progress tracking when form is submitted
+        document.getElementById('proposalForm').addEventListener('submit', function(e) {
+            // ... existing submit handler code ...
+            
+            // Start agent progress tracking
+            updateAgentProgress();
+        });
+
+        function updateCriticalPath(criticalPath, taskPriorities) {
+            const criticalPathList = document.getElementById('criticalPathList');
+            criticalPathList.innerHTML = criticalPath.map(task => `
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge bg-danger me-2">Critical</span>
+                        ${task}
+                    </div>
+                    <div>
+                        <span class="badge bg-${getPriorityColor(taskPriorities[task].priority)}">
+                            ${taskPriorities[task].priority.toUpperCase()}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getPriorityColor(priority) {
+            switch (priority.toLowerCase()) {
+                case 'high': return 'danger';
+                case 'medium': return 'warning';
+                case 'low': return 'info';
+                default: return 'secondary';
+            }
+        }
+
+        // Update the dependency graph to show priorities
+        function createDependencyGraph(dependencies, taskPriorities, criticalPath) {
+            // ... existing graph setup ...
+            
+            // Update node styling
+            node.append("circle")
+                .attr("r", d => taskPriorities[d.id]?.priority === 'high' ? 12 : 10)
+                .attr("fill", d => getNodeColor(d, taskPriorities, criticalPath))
+                .attr("stroke", d => criticalPath.includes(d.id) ? "#dc3545" : "none")
+                .attr("stroke-width", 2);
+            
+            // Add priority indicators
+            node.append("text")
+                .attr("class", "priority-label")
+                .attr("x", 15)
+                .attr("y", -10)
+                .text(d => taskPriorities[d.id]?.priority.charAt(0).toUpperCase());
+            
+            // Update tooltips
+            node.select("title")
+                .text(d => `${d.id}
+Status: ${d.status}
+Priority: ${taskPriorities[d.id]?.priority.toUpperCase()}
+On Critical Path: ${criticalPath.includes(d.id) ? "Yes" : "No"}
+Blocking: ${dependencies[d.id]?.length || 0} tasks`);
+        }
+
+        function getNodeColor(node, taskPriorities, criticalPath) {
+            if (criticalPath.includes(node.id)) {
+                return "#dc3545";  // Critical path color
+            }
+            
+            switch (taskPriorities[node.id]?.priority) {
+                case 'high': return '#e74c3c';
+                case 'medium': return '#f39c12';
+                case 'low': return '#3498db';
+                default: return '#95a5a6';
+            }
+        }
+
+        let timelineChart;
+
+        function createTimeline(data) {
+            const tasks = [];
+            const now = new Date();
+            
+            // Process tasks from each agent
+            Object.entries(data).forEach(([agentName, agentData]) => {
+                agentData.tasks.forEach(task => {
+                    const startDate = task.started_at ? new Date(task.started_at) : now;
+                    const endDate = task.estimated_completion ? new Date(task.estimated_completion) : 
+                                   new Date(startDate.getTime() + 3600000); // Default 1 hour duration
+                    
+                    tasks.push({
+                        id: `${agentName}-${task.name}`,
+                        name: task.name,
+                        agent: agentName,
+                        start: startDate,
+                        end: endDate,
+                        progress: task.progress,
+                        status: task.status,
+                        dependencies: task.dependencies,
+                        priority: task.priority,
+                        onCriticalPath: task.on_critical_path
+                    });
+                });
+            });
+            
+            // Create timeline visualization
+            const container = document.getElementById('timelineChart');
+            
+            const options = {
+                height: '400px',
+                stack: false,
+                showMajorLabels: true,
+                showCurrentTime: true,
+                zoomable: true,
+                editable: false,
+                margin: {
+                    item: {
+                        horizontal: 10,
+                        vertical: 10
+                    }
+                },
+                orientation: 'top',
+                onInitialDrawComplete: function() {
+                    addTaskTooltips();
+                    addProgressBars();
+                }
+            };
+            
+            // Create timeline items with styling
+            const items = new vis.DataSet(tasks.map(task => ({
+                id: task.id,
+                content: `
+                    <div class="timeline-item ${task.onCriticalPath ? 'critical-path' : ''}">
+                        <div class="task-header">
+                            <span class="task-name">${task.name}</span>
+                            <span class="task-badge ${task.status.toLowerCase()}">${task.status}</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: ${task.progress}%"></div>
+                        </div>
+                    </div>
+                `,
+                start: task.start,
+                end: task.end,
+                className: `priority-${task.priority.toLowerCase()}`,
+                group: task.agent
+            })));
+            
+            // Create groups for agents
+            const groups = new vis.DataSet(
+                Object.keys(data).map(agentName => ({
+                    id: agentName,
+                    content: agentName,
+                    className: 'timeline-group'
+                }))
+            );
+            
+            timelineChart = new vis.Timeline(container, items, groups, options);
+            
+            // Add dependency arrows
+            addDependencyArrows(tasks);
+            
+            // Add interaction handlers
+            timelineChart.on('click', function(properties) {
+                if (properties.item) {
+                    showTaskDetails(properties.item, tasks);
+                }
+            });
+            
+            return timelineChart;
+        }
+
+        function addTaskTooltips() {
+            document.querySelectorAll('.timeline-item').forEach(item => {
+                tippy(item, {
+                    content: (reference) => {
+                        const taskId = reference.closest('.vis-item').getAttribute('data-id');
+                        const task = timelineChart.itemsData.get(taskId);
+                        return `
+                            <div class="task-tooltip">
+                                <h6>${task.name}</h6>
+                                <div>Status: ${task.status}</div>
+                                <div>Progress: ${task.progress}%</div>
+                                <div>Priority: ${task.priority}</div>
+                                ${task.onCriticalPath ? '<div class="critical-path-badge">Critical Path</div>' : ''}
+                            </div>
+                        `;
+                    },
+                    allowHTML: true,
+                    placement: 'top',
+                    interactive: true
+                });
+            });
+        }
+
+        function addProgressBars() {
+            document.querySelectorAll('.progress-bar-container').forEach(container => {
+                const progress = parseInt(container.querySelector('.progress-bar').style.width);
+                const gradient = `linear-gradient(90deg, 
+                    var(--progress-color) ${progress}%, 
+                    var(--progress-background) ${progress}%
+                )`;
+                container.style.background = gradient;
+            });
+        }
+
+        function addDependencyArrows(tasks) {
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("class", "dependency-arrows");
+            document.getElementById('timelineChart').appendChild(svg);
+            
+            tasks.forEach(task => {
+                if (task.dependencies && task.dependencies.length > 0) {
+                    task.dependencies.forEach(depId => {
+                        const depTask = tasks.find(t => t.id === depId);
+                        if (depTask) {
+                            drawArrow(svg, depTask, task);
+                        }
+                    });
+                }
+            });
+        }
+
+        function drawArrow(svg, fromTask, toTask) {
+            const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            arrow.setAttribute("class", "dependency-arrow");
+            arrow.setAttribute("marker-end", "url(#arrowhead)");
+            
+            const fromEl = document.querySelector(`[data-id="${fromTask.id}"]`);
+            const toEl = document.querySelector(`[data-id="${toTask.id}"]`);
+            
+            if (fromEl && toEl) {
+                const fromRect = fromEl.getBoundingClientRect();
+                const toRect = toEl.getBoundingClientRect();
+                
+                const path = calculateArrowPath(fromRect, toRect);
+                arrow.setAttribute("d", path);
+                
+                if (fromTask.onCriticalPath && toTask.onCriticalPath) {
+                    arrow.classList.add("critical-path");
+                }
+                
+                svg.appendChild(arrow);
+            }
+        }
+
+        function calculateArrowPath(from, to) {
+            const startX = from.right;
+            const startY = from.top + from.height / 2;
+            const endX = to.left;
+            const endY = to.top + to.height / 2;
+            
+            const controlPoint1X = startX + (endX - startX) / 3;
+            const controlPoint2X = startX + (endX - startX) * 2/3;
+            
+            return `M ${startX} ${startY} 
+                    C ${controlPoint1X} ${startY} 
+                      ${controlPoint2X} ${endY} 
+                      ${endX} ${endY}`;
+        }
+
+        function zoomTimeline(unit) {
+            const now = new Date();
+            let start, end;
+            
+            switch(unit) {
+                case 'hour':
+                    start = new Date(now.getTime() - 3600000);
+                    end = new Date(now.getTime() + 3600000);
+                    break;
+                case 'day':
+                    start = new Date(now.getTime() - 86400000);
+                    end = new Date(now.getTime() + 86400000);
+                    break;
+                case 'week':
+                    start = new Date(now.getTime() - 604800000);
+                    end = new Date(now.getTime() + 604800000);
+                    break;
+            }
+            
+            timelineChart.setWindow(start, end);
+        }
+
+        function resetTimelineZoom() {
+            timelineChart.fit();
+        }
     </script>
 </body>
 </html> 

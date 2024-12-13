@@ -8,15 +8,14 @@ import time
 import re
 from crewai import Agent, Task, Crew, Process
 from langchain.tools import Tool
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 
 class ContentAnalyzerConfig(BaseModel):
     """Configuration for content analyzer."""
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 class ContentAnalyzerAgent(Agent):
     """Agent specialized in analyzing website content."""
@@ -166,8 +165,7 @@ class ContentAnalyzerAgent(Agent):
 
 class TechnicalAnalyzerConfig(BaseModel):
     """Configuration for technical analyzer."""
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 class TechnicalAnalyzerAgent(Agent):
     """Agent specialized in analyzing technical aspects."""
@@ -285,13 +283,13 @@ class TechnicalAnalyzerAgent(Agent):
 
 class UserExperienceConfig(BaseModel):
     """Configuration for user experience analyzer."""
-    model_config = {
-        "arbitrary_types_allowed": True,
-        "json_encoders": {
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        json_encoders={
             datetime: lambda v: v.isoformat(),
             Path: str
         }
-    }
+    )
 
 class UserExperienceAgent(Agent):
     """Agent specialized in analyzing user experience."""
@@ -408,8 +406,7 @@ class UserExperienceAgent(Agent):
 
 class LawFirmAnalyzerConfig(BaseModel):
     """Configuration for law firm analyzer."""
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 class LawFirmAnalyzerAgent(Agent):
     """Agent specialized in analyzing law firm websites."""

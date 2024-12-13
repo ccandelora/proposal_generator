@@ -5,6 +5,87 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 import json
+from pydantic import BaseModel, Field
+
+@dataclass
+class AgentMessage:
+    """Message exchanged between agents."""
+    sender: str
+    recipient: str
+    content: Dict[str, Any]
+    message_type: str
+    priority: str = "medium"
+    timestamp: datetime = datetime.now()
+    requires_response: bool = False
+    context: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert message to dictionary."""
+        return {
+            'sender': self.sender,
+            'recipient': self.recipient,
+            'content': self.content,
+            'message_type': self.message_type,
+            'priority': self.priority,
+            'timestamp': self.timestamp.isoformat(),
+            'requires_response': self.requires_response,
+            'context': self.context,
+            'metadata': self.metadata
+        }
+
+@dataclass
+class AgentContext:
+    """Context for agent operations and communication."""
+    current_task: Optional[Dict[str, Any]] = None
+    shared_memory: Dict[str, Any] = None
+    conversation_history: List[AgentMessage] = None
+    task_status: Dict[str, str] = None
+    environment_vars: Dict[str, str] = None
+    active_connections: Dict[str, Any] = None
+    
+    def __post_init__(self):
+        """Initialize default values for None fields."""
+        if self.shared_memory is None:
+            self.shared_memory = {}
+        if self.conversation_history is None:
+            self.conversation_history = []
+        if self.task_status is None:
+            self.task_status = {}
+        if self.environment_vars is None:
+            self.environment_vars = {}
+        if self.active_connections is None:
+            self.active_connections = {}
+    
+    def update_from_message(self, message: AgentMessage) -> None:
+        """Update context based on received message."""
+        if message.context:
+            self.shared_memory.update(message.context)
+        self.conversation_history.append(message)
+    
+    def get_current_task(self) -> Optional[Dict[str, Any]]:
+        """Get the current task being processed."""
+        return self.current_task
+    
+    def set_current_task(self, task: Dict[str, Any]) -> None:
+        """Set the current task being processed."""
+        self.current_task = task
+    
+    async def publish_message(self, channel: str, message: AgentMessage) -> None:
+        """Publish message to specified channel."""
+        if channel in self.active_connections:
+            connection = self.active_connections[channel]
+            await connection.publish(message.to_dict())
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert context to dictionary."""
+        return {
+            'current_task': self.current_task,
+            'shared_memory': self.shared_memory,
+            'conversation_history': [msg.to_dict() for msg in self.conversation_history],
+            'task_status': self.task_status,
+            'environment_vars': self.environment_vars
+        }
 
 class EnumEncoder(json.JSONEncoder):
     """JSON encoder that handles Enum values."""
@@ -208,36 +289,58 @@ class ResumptionStrategy:
     use_cached_results: bool = True
     validation_level: str = "strict"  # strict, lenient, skip
 
-@dataclass
-class WorkflowConfig:
+class ProcessType(str, Enum):
+    SEQUENTIAL = "sequential"
+    HIERARCHICAL = "hierarchical"
+
+class WorkflowConfig(BaseModel):
     """Configuration for proposal workflow."""
-    # API Keys and Configuration
+    process_type: ProcessType = Field(default=ProcessType.SEQUENTIAL)
+    concurrent_analysis: bool = Field(default=True)
+    max_workers: int = Field(default=4)
+    include_mockups: bool = Field(default=True)
+    include_seo: bool = Field(default=True)
+    include_market: bool = Field(default=True)
+    include_content: bool = Field(default=True)
+    memory_enabled: bool = Field(default=True)
+    planning_enabled: bool = Field(default=True)
+    verbose: bool = Field(default=True)
+    
+    # API Keys
     google_search_api_key: Optional[str] = None
     google_custom_search_id: Optional[str] = None
     gemini_api_key: Optional[str] = None
-    
-    # Output Configuration
-    output_dir: Path = Path("output")
-    cache_dir: Path = Path("cache")
-    cache_results: bool = True
-    
-    # Feature Flags
-    concurrent_analysis: bool = True
-    include_mockups: bool = True
-    include_seo: bool = True
-    include_market: bool = True
-    include_content: bool = True
-    
-    # Performance Settings
-    max_workers: int = 4
-    timeout: int = 300
+    serper_api_key: Optional[str] = None
 
-    def __post_init__(self):
-        """Convert string paths to Path objects."""
-        if isinstance(self.output_dir, str):
-            self.output_dir = Path(self.output_dir)
-        if isinstance(self.cache_dir, str):
-            self.cache_dir = Path(self.cache_dir)
+class ProposalMetrics(BaseModel):
+    """Metrics for proposal generation."""
+    token_usage: Dict[str, int] = Field(default_factory=dict)
+    task_durations: Dict[str, float] = Field(default_factory=dict)
+    completion_time: float = Field(default=0.0)
+    error_count: int = Field(default=0)
+    warning_count: int = Field(default=0)
+
+class ResearchResult(BaseModel):
+    """Results from competitor and market research."""
+    competitor_analysis: Dict[str, Any] = Field(default_factory=dict)
+    market_trends: List[str] = Field(default_factory=list)
+    industry_insights: Dict[str, Any] = Field(default_factory=dict)
+    seo_opportunities: Dict[str, Any] = Field(default_factory=dict)
+
+class TechnicalAnalysis(BaseModel):
+    """Technical analysis results."""
+    requirements: Dict[str, Any] = Field(default_factory=dict)
+    recommendations: List[str] = Field(default_factory=list)
+    tech_stack: Dict[str, List[str]] = Field(default_factory=dict)
+    performance_metrics: Dict[str, Any] = Field(default_factory=dict)
+
+class ProposalOutput(BaseModel):
+    """Final proposal output with all components."""
+    content: str = Field(...)
+    metrics: ProposalMetrics = Field(default_factory=ProposalMetrics)
+    research: ResearchResult = Field(default_factory=ResearchResult)
+    analysis: TechnicalAnalysis = Field(default_factory=TechnicalAnalysis)
+    timestamp: datetime = Field(default_factory=datetime.now)
 
 @dataclass
 class WorkflowResult:

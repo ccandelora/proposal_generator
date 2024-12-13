@@ -1,0 +1,5 @@
+# Web testing dependencies
+selenium==4.27.1
+selenium-stealth==1.0.6
+webdriver-manager==4.0.2
+playwright==1.49.1 

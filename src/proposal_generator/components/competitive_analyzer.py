@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 import time
 from crewai import Agent, Task, Crew, Process
 from langchain.tools import Tool
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from pathlib import Path
 
@@ -18,9 +18,10 @@ logger = logging.getLogger(__name__)
 
 class MarketTrendsConfig(BaseModel):
     """Configuration for market trends analyzer."""
-    class Config:
-        arbitrary_types_allowed = True
-        extra = "allow"
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra="allow"
+    )
 
 class MarketTrendsAgent(Agent):
     """Agent specialized in analyzing market trends."""
@@ -57,13 +58,16 @@ class MarketTrendsAgent(Agent):
             # Get related queries
             related_queries = self.pytrends.related_queries()
             
-            # Calculate growth rate
+            # Calculate growth rate safely
+            growth_rate = 0
             if not interest_over_time_df.empty:
                 start_value = interest_over_time_df.iloc[0][practice_area]
                 end_value = interest_over_time_df.iloc[-1][practice_area]
-                growth_rate = (end_value - start_value) / start_value if start_value != 0 else 0
-            else:
-                growth_rate = 0
+                if start_value > 0:
+                    growth_rate = (end_value - start_value) / start_value
+                else:
+                    # If start value is 0, use absolute end value as growth
+                    growth_rate = end_value if end_value > 0 else 0
             
             # Extract top related queries
             top_queries = []
@@ -88,9 +92,10 @@ class MarketTrendsAgent(Agent):
 
 class NewsAnalyzerConfig(BaseModel):
     """Configuration for news analyzer."""
-    class Config:
-        arbitrary_types_allowed = True
-        extra = "allow"
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra="allow"
+    )
 
 class NewsAnalyzerAgent(Agent):
     """Agent specialized in analyzing news and media coverage."""
@@ -189,14 +194,14 @@ class NewsAnalyzerAgent(Agent):
 
 class FinancialAnalyzerConfig(BaseModel):
     """Configuration for financial analyzer."""
-    model_config = {
-        "arbitrary_types_allowed": True,
-        "extra": "allow",
-        "json_encoders": {
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra="allow",
+        json_encoders={
             datetime: lambda v: v.isoformat(),
             Path: str
         }
-    }
+    )
 
 class FinancialAnalyzerAgent(Agent):
     """Agent specialized in financial analysis."""
@@ -236,17 +241,23 @@ class FinancialAnalyzerAgent(Agent):
                 name = competitor.get('name', '')
                 competitor_analysis[name] = self._analyze_competitor_financials(competitor)
             
-            # Calculate market share
+            # Calculate market share safely
             total_revenue = sum(
                 analysis.get('estimated_revenue', 0)
                 for analysis in competitor_analysis.values()
             )
             
             market_share = {}
-            for name, analysis in competitor_analysis.items():
-                revenue = analysis.get('estimated_revenue', 0)
-                share = round(revenue / total_revenue * 100, 2) if total_revenue > 0 else 0
-                market_share[name] = share
+            if total_revenue > 0:
+                for name, analysis in competitor_analysis.items():
+                    revenue = analysis.get('estimated_revenue', 0)
+                    share = round(revenue / total_revenue * 100, 2)
+                    market_share[name] = share
+            else:
+                # If total revenue is 0, distribute shares equally
+                if competitor_analysis:
+                    equal_share = round(100 / len(competitor_analysis), 2)
+                    market_share = {name: equal_share for name in competitor_analysis}
             
             return {
                 'market_size': market_size,

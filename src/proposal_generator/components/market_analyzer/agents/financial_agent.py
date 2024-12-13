@@ -81,17 +81,23 @@ class FinancialAnalyzerAgent:
             findings = []
             metrics = {}
             
-            # Get market size data
+            # Get market size data with defaults
             market = data.get('market_size', {})
             current_size = market.get('current', 0)
             projected_size = market.get('projected', 0)
             growth_rate = market.get('growth_rate', 0)
             
-            # Calculate metrics
+            # Calculate metrics safely
             metrics['current_size'] = current_size
             metrics['projected_size'] = projected_size
             metrics['growth_rate'] = growth_rate
-            metrics['growth_potential'] = (projected_size - current_size) / current_size if current_size > 0 else 0
+            
+            # Calculate growth potential safely
+            if current_size > 0:
+                metrics['growth_potential'] = (projected_size - current_size) / current_size
+            else:
+                # If current size is 0, use absolute projected size as potential
+                metrics['growth_potential'] = projected_size if projected_size > 0 else 0
             
             # Generate findings
             if growth_rate > 0.2:

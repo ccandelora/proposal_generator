@@ -47,6 +47,7 @@ def get_gemini_llm():
     """Get the Gemini LLM configuration."""
     return ChatGoogleGenerativeAI(
         model="gemini-pro",
+        convert_system_message_to_human=True,
         verbose=True,
         temperature=0.7,
         google_api_key=os.getenv("GEMINI_API_KEY"),  # Project 1
