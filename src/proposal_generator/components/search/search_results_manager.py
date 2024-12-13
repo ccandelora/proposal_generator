@@ -35,31 +35,56 @@ class SearchResultsManager:
         """Perform search and process results."""
         try:
             if self.progress_callback:
-                self.progress_callback("Search", "Starting search...", 0)
+                self.progress_callback("Search", "Initializing search...", 0)
             
             # Perform search
+            if self.progress_callback:
+                self.progress_callback("Search", f"Searching for: {query}", 10)
+            
+            logger.info(f"Executing search for: {query}")
             search_results = self.search_client.search(query, num_results)
+            logger.info(f"Got {len(search_results)} raw results")
             
             if self.progress_callback:
                 self.progress_callback("Search", "Processing results...", 30)
             
             # Process results
             total_results = len(search_results)
+            processed_results = []
+            
             for i, result in enumerate(search_results):
                 if result.get('url') and result['url'] not in self.processed_urls:
-                    processed = await self._process_result(result)
-                    if processed:
-                        self.results.append(processed)
-                        self.processed_urls.add(result['url'])
-                
-                if self.progress_callback:
-                    progress = 30 + int((i / total_results) * 60)  # 30-90%
-                    self.progress_callback("Search", f"Processing result {i+1}/{total_results}", progress)
+                    if self.progress_callback:
+                        progress = 30 + int((i / total_results) * 60)  # 30-90%
+                        self.progress_callback(
+                            "Search", 
+                            f"Processing result {i+1}/{total_results}: {result.get('title', '')[:30]}...", 
+                            progress
+                        )
+                    
+                    try:
+                        processed = await self._process_result(result)
+                        if processed:
+                            processed_results.append(processed)
+                            self.processed_urls.add(result['url'])
+                            logger.info(f"Successfully processed: {result['url']}")
+                        else:
+                            logger.warning(f"Failed to process result: {result['url']}")
+                    except Exception as e:
+                        logger.error(f"Error processing result {result.get('url')}: {str(e)}")
+            
+            # Sort by relevance
+            processed_results.sort(key=lambda x: x.relevance_score, reverse=True)
             
             if self.progress_callback:
-                self.progress_callback("Search", "Finalizing results...", 100)
+                self.progress_callback(
+                    "Search", 
+                    f"Found {len(processed_results)} relevant results", 
+                    100
+                )
             
-            return self.results
+            logger.info(f"Search complete. Processed {len(processed_results)} results")
+            return processed_results
 
         except Exception as e:
             logger.error(f"Error in search and process: {str(e)}")

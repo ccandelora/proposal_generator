@@ -13,7 +13,7 @@ import asyncio
 
 from ..workflow.proposal_workflow import ProposalWorkflowManager
 from ..workflow.workflow_models import WorkflowConfig, EnumEncoder
-from .export_manager import ExportManager
+from ..components.export_manager import ExportManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -77,56 +77,28 @@ async def index():
 async def generate_proposal():
     """Generate proposal based on form data."""
     try:
-        # Get JSON data from request
         data = await request.get_json()
-        if not data:
-            return jsonify({
-                'success': False,
-                'error': 'No data provided'
-            }), 400
-
-        # Log received data
-        logger.info(f"Received proposal request: {json.dumps(data, default=str)}")
-
-        # Extract topic and requirements from data
-        topic = f"{data['business_name']} - {data['project_description']}"
-        requirements = {
-            'target_audience': data['target_market'],
-            'industry': data['industry'],
-            'client_name': data['client_name'],
-            'business_name': data['business_name'],
-            'website': data.get('website', ''),
-            'competitors': data.get('competitors', []),
-            'features': data.get('requirements', {}).get('features', []),
-            'project_description': data['project_description']
-        }
-
-        # Create workflow config
-        config = WorkflowConfig(
-            concurrent_analysis=True,
-            max_workers=4,
-            include_mockups=True,
-            include_seo=True,
-            include_market=True,
-            include_content=True,
-            google_search_api_key=os.getenv("GOOGLE_SEARCH_API_KEY"),
-            google_custom_search_id=os.getenv("GOOGLE_CUSTOM_SEARCH_ID"),
-            gemini_api_key=os.getenv("GEMINI_API_KEY")
-        )
         
-        # Initialize workflow manager
-        workflow_manager = ProposalWorkflowManager(config)
+        # Create background task for long-running operations
+        task = asyncio.create_task(workflow_manager.generate_proposal(
+            topic=f"{data['business_name']} - {data['project_description']}",
+            requirements=data
+        ))
         
-        # Generate proposal with both topic and requirements
-        logger.info("Starting proposal generation...")
-        result = await workflow_manager.generate_proposal(topic, requirements)
-        logger.info("Proposal generation completed")
+        # Set timeout
+        result = await asyncio.wait_for(task, timeout=30.0)  # 30 second timeout
         
-        # Convert result to JSON-serializable format
-        response_data = result.to_dict()
-        logger.info(f"Sending response: {json.dumps(response_data, default=str)}")
-        return jsonify(response_data)
+        return jsonify({
+            'success': True,
+            'data': result,
+            'timestamp': datetime.now().isoformat()
+        })
         
+    except asyncio.TimeoutError:
+        return jsonify({
+            'success': False,
+            'error': 'Request timed out'
+        }), 504
     except Exception as e:
         logger.error(f"Error generating proposal: {str(e)}", exc_info=True)
         return jsonify({
@@ -188,26 +160,36 @@ def export_proposal(result_key: str, format: str):
             'errors': [str(e)]
         }), 500
 
-@app.route('/api/progress/<result_key>')
-def get_progress(result_key: str):
-    """Get proposal generation progress."""
+@app.route('/api/progress')
+async def get_progress():
+    """Get current progress state."""
     try:
-        result = cache.get(result_key)
-        if not result:
+        if not workflow_manager:
             return jsonify({
-                'success': False,
-                'errors': ['Proposal result not found or expired']
+                'status': '',
+                'progress': 0,
+                'completed_steps': [],
+                'elapsed_time': 0,
+                'estimated_remaining': None,
+                'stage_progress': {},
+                'current_stage': '',
+                'error': 'No active workflow'
             }), 404
             
-        return jsonify({
-            'success': True,
-            'progress': result.progress.__dict__ if result.progress else None
-        })
+        progress_state = await workflow_manager.get_progress_state()
+        return jsonify(progress_state)
         
     except Exception as e:
+        logger.error(f"Error getting progress: {str(e)}")
         return jsonify({
-            'success': False,
-            'errors': [str(e)]
+            'status': '',
+            'progress': 0,
+            'completed_steps': [],
+            'elapsed_time': 0,
+            'estimated_remaining': None,
+            'stage_progress': {},
+            'current_stage': '',
+            'error': str(e)
         }), 500
 
 @app.route('/api/cache/clear', methods=['POST'])

@@ -14,7 +14,7 @@ class ContentSEOAgent:
     def analyze_content_seo(self, url: str, page_data: Dict[str, Any]) -> SEOInsight:
         """Analyze content SEO aspects."""
         if self.progress_callback:
-            self.progress_callback("Analyzing SEO content...", 0)
+            self.progress_callback("Starting SEO analysis...", 0)
             
         try:
             if not page_data:
@@ -27,22 +27,31 @@ class ContentSEOAgent:
                     metadata={}
                 )
 
-            # Analyze keyword usage
-            keyword_analysis = self._analyze_keyword_usage(page_data)
-            
-            # Analyze content structure
-            structure_analysis = self._analyze_content_structure(page_data)
-            
             # Analyze content quality
-            quality_analysis = self._analyze_content_quality(page_data)
+            if self.progress_callback:
+                self.progress_callback("Analyzing content quality...", 20)
+            quality_metrics = self._analyze_content_quality(page_data)
             
-            # Calculate overall score
-            score = (keyword_analysis['score'] + structure_analysis['score'] + quality_analysis['score']) / 3
+            # Analyze keyword usage
+            if self.progress_callback:
+                self.progress_callback("Analyzing keyword optimization...", 40)
+            keyword_metrics = self._analyze_keyword_usage(page_data)
             
-            # Determine priority
-            priority = 'high' if score < 0.7 else 'medium' if score < 0.9 else 'low'
+            # Analyze readability
+            if self.progress_callback:
+                self.progress_callback("Calculating readability scores...", 60)
+            readability = self._calculate_readability(page_data)
             
-            return SEOInsight(
+            # Analyze meta elements
+            if self.progress_callback:
+                self.progress_callback("Checking meta elements...", 80)
+            meta_analysis = self._analyze_meta_elements(page_data)
+            
+            # Compile results
+            if self.progress_callback:
+                self.progress_callback("Compiling SEO insights...", 90)
+                
+            insight = SEOInsight(
                 category='content_seo',
                 score=score,
                 findings=[
@@ -63,8 +72,14 @@ class ContentSEOAgent:
                 }
             )
             
+            if self.progress_callback:
+                self.progress_callback("SEO analysis complete", 100)
+                
+            return insight
+            
         except Exception as e:
-            logger.error(f"Error in content SEO analysis: {str(e)}")
+            if self.progress_callback:
+                self.progress_callback(f"Error in SEO analysis: {str(e)}", 0)
             return SEOInsight(
                 category='content_seo',
                 score=0.0,
@@ -73,9 +88,6 @@ class ContentSEOAgent:
                 priority='unknown',
                 metadata={}
             )
-        
-        if self.progress_callback:
-            self.progress_callback("SEO analysis complete", 100)
 
     def _analyze_keyword_usage(self, page_data: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze keyword usage in content."""

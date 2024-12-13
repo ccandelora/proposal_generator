@@ -31,166 +31,97 @@ class ProgressState:
     estimated_time_remaining: Optional[int] = None
 
 class WebProgressTracker:
-    """Track progress for web interface with WebSocket support."""
+    """Track progress for web interface."""
     
     def __init__(self):
         """Initialize progress tracker."""
-        self.start_time = time.time()
         self.current_status = ""
         self.overall_progress = 0
         self.completed_steps = []
-        self.current_stage = ""
-        self.is_complete = False
-        self.error = ""
-        self.sub_tasks: Dict[str, SubTaskProgress] = {}
-        self.active_connections: List[WebSocket] = []
-        self.last_update_time = time.time()
-        self.progress_history: List[Dict[str, Any]] = []
+        self.start_time = time.time()
+        self.stage_times = {}
+        self.stage_progress = {}
+        self.last_update = time.time()
+        self.progress_history = []
 
-    async def connect(self, websocket: WebSocket):
-        """Handle new WebSocket connection."""
-        await websocket.accept()
-        self.active_connections.append(websocket)
-        # Send current state to new connection
-        await self.send_update(websocket, self.get_state())
-
-    def disconnect(self, websocket: WebSocket):
-        """Handle WebSocket disconnection."""
-        self.active_connections.remove(websocket)
-
-    async def broadcast_update(self, state: Dict[str, Any]):
-        """Broadcast update to all connected clients."""
-        for connection in self.active_connections:
-            await self.send_update(connection, state)
-
-    async def send_update(self, websocket: WebSocket, state: Dict[str, Any]):
-        """Send update to specific WebSocket connection."""
-        try:
-            await websocket.send_json(state)
-        except Exception:
-            await self.disconnect(websocket)
-
-    def start_subtask(self, name: str, status: str = "Starting...") -> None:
-        """Start tracking a new subtask."""
-        self.sub_tasks[name] = SubTaskProgress(
-            name=name,
-            status=status,
-            progress=0,
-            started_at=datetime.now()
-        )
-        asyncio.create_task(self._broadcast_state())
-
-    def update_subtask(self, name: str, progress: int, status: str = None) -> None:
-        """Update subtask progress."""
-        if name in self.sub_tasks:
-            task = self.sub_tasks[name]
-            task.progress = progress
-            if status:
-                task.status = status
-            if progress >= 100:
-                task.completed_at = datetime.now()
-            asyncio.create_task(self._broadcast_state())
-
-    async def update(self, status: str, progress: int, completed_steps: List[str]) -> Dict[str, Any]:
-        """Update progress and broadcast state."""
-        self.current_status = status
-        self.overall_progress = progress
-        self.completed_steps = completed_steps
-        
-        # Calculate rate of progress
-        current_time = time.time()
-        time_diff = current_time - self.last_update_time
-        if time_diff > 0:
-            progress_diff = progress - self.progress_history[-1]['progress'] if self.progress_history else 0
-            progress_rate = progress_diff / time_diff
-            
-            # Estimate time remaining
-            if progress_rate > 0:
-                remaining_progress = 100 - progress
-                estimated_seconds = remaining_progress / progress_rate
-                self.estimated_time_remaining = int(estimated_seconds)
-        
-        # Update history
-        state = self.get_state()
-        self.progress_history.append(state)
-        self.last_update_time = current_time
-        
-        # Broadcast update
-        await self._broadcast_state()
-        return state
-
-    async def _broadcast_state(self):
-        """Broadcast current state to all connections."""
-        state = self.get_state()
-        await self.broadcast_update(state)
-
-    def get_state(self) -> Dict[str, Any]:
-        """Get current progress state for web interface."""
-        current_time = time.time()
+    def get_default_state(self) -> Dict[str, Any]:
+        """Get default progress state."""
         return {
             'status': self.current_status,
             'progress': self.overall_progress,
             'completed_steps': self.completed_steps,
-            'elapsed_time': int(current_time - self.start_time),
-            'stage': self.current_stage,
-            'is_complete': self.is_complete,
-            'error': self.error,
-            'timestamp': datetime.now().isoformat(),
-            'sub_tasks': {
-                name: {
-                    'name': task.name,
-                    'status': task.status,
-                    'progress': task.progress,
-                    'started_at': task.started_at.isoformat(),
-                    'completed_at': task.completed_at.isoformat() if task.completed_at else None,
-                    'error': task.error
-                }
-                for name, task in self.sub_tasks.items()
-            },
-            'estimated_time_remaining': self.estimated_time_remaining,
-            'progress_rate': self._calculate_progress_rate(),
-            'detailed_status': self._generate_detailed_status()
+            'elapsed_time': int(time.time() - self.start_time),
+            'estimated_remaining': None,
+            'stage_progress': self.stage_progress,
+            'current_stage': self.current_status.split(':')[0] if ':' in self.current_status else self.current_status,
+            'error': None
         }
 
-    def _calculate_progress_rate(self) -> Optional[float]:
-        """Calculate progress rate per minute."""
+    async def update(self, status: str, progress: float, completed_steps: List[str]) -> Dict[str, Any]:
+        """Update progress and return current state."""
+        try:
+            self.current_status = status
+            self.overall_progress = progress
+            self.completed_steps = completed_steps
+            
+            # Update stage progress
+            if ':' in status:
+                stage, detail = status.split(':', 1)
+                stage = stage.strip()
+                if stage not in self.stage_times:
+                    self.stage_times[stage] = time.time()
+                self.stage_progress[stage] = progress
+            
+            # Track progress history
+            self.progress_history.append({
+                'time': time.time(),
+                'status': status,
+                'progress': progress
+            })
+            
+            # Calculate estimated time remaining
+            estimated_remaining = self._estimate_remaining_time()
+            
+            # Return current state
+            return {
+                'status': self.current_status,
+                'progress': self.overall_progress,
+                'completed_steps': self.completed_steps,
+                'elapsed_time': int(time.time() - self.start_time),
+                'estimated_remaining': estimated_remaining,
+                'stage_progress': self.stage_progress,
+                'current_stage': status.split(':')[0] if ':' in status else status,
+                'error': None
+            }
+            
+        except Exception as e:
+            logger.error(f"Error updating progress: {str(e)}")
+            # Return default state with error
+            state = self.get_default_state()
+            state['error'] = str(e)
+            return state
+
+    def _estimate_remaining_time(self) -> Optional[int]:
+        """Estimate remaining time in seconds."""
         if len(self.progress_history) < 2:
             return None
             
-        latest = self.progress_history[-1]
-        minute_ago = next(
-            (state for state in reversed(self.progress_history)
-             if state['timestamp'] < latest['timestamp'] - 60),
-            None
-        )
+        # Calculate progress speed
+        recent_history = [
+            p for p in self.progress_history
+            if time.time() - p['time'] < 60  # Last minute
+        ]
         
-        if minute_ago:
-            progress_diff = latest['progress'] - minute_ago['progress']
-            return progress_diff
-
-        return None
-
-    def _generate_detailed_status(self) -> Dict[str, Any]:
-        """Generate detailed status information."""
-        return {
-            'active_tasks': [
-                task for task in self.sub_tasks.values()
-                if not task.completed_at
-            ],
-            'recent_completions': [
-                task for task in self.sub_tasks.values()
-                if task.completed_at and 
-                (datetime.now() - task.completed_at).total_seconds() < 300
-            ],
-            'current_phase': self.current_stage,
-            'phase_progress': self._get_phase_progress()
-        }
-
-    def _get_phase_progress(self) -> Dict[str, Any]:
-        """Get detailed progress for current phase."""
-        return {
-            'name': self.current_stage,
-            'progress': self.overall_progress,
-            'sub_tasks_complete': len([t for t in self.sub_tasks.values() if t.completed_at]),
-            'sub_tasks_total': len(self.sub_tasks)
-        }
+        if len(recent_history) < 2:
+            return None
+            
+        progress_diff = recent_history[-1]['progress'] - recent_history[0]['progress']
+        time_diff = recent_history[-1]['time'] - recent_history[0]['time']
+        
+        if time_diff <= 0 or progress_diff <= 0:
+            return None
+            
+        progress_per_second = progress_diff / time_diff
+        remaining_progress = 100 - self.overall_progress
+        
+        return int(remaining_progress / progress_per_second)

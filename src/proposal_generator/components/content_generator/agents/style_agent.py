@@ -77,26 +77,35 @@ class StyleGuideAgent:
             
             # Apply tone rules
             if self.progress_callback:
-                self.progress_callback("Applying tone rules...", 25)
+                self.progress_callback("Applying tone rules...", 20)
             content = self._apply_tone_rules(content, tone)
             
             # Apply branding rules
             if self.progress_callback:
-                self.progress_callback("Applying branding rules...", 50)
+                self.progress_callback("Applying branding guidelines...", 40)
             content = self._apply_branding_rules(content)
             
             # Apply formatting rules
             if self.progress_callback:
-                self.progress_callback("Applying formatting rules...", 75)
+                self.progress_callback("Formatting content...", 60)
             content = self._apply_formatting_rules(content)
             
             # Apply language rules
             if self.progress_callback:
-                self.progress_callback("Applying language rules...", 90)
+                self.progress_callback("Optimizing language...", 80)
             content = self._apply_language_rules(content)
             
+            # Validate final content
             if self.progress_callback:
-                self.progress_callback("Style application complete", 100)
+                self.progress_callback("Validating style rules...", 90)
+            violations = self.validate_style(content, tone)
+            
+            if not violations:
+                if self.progress_callback:
+                    self.progress_callback("Style application complete", 100)
+            else:
+                if self.progress_callback:
+                    self.progress_callback(f"Found {len(violations)} style violations", 95)
             
             return content
 

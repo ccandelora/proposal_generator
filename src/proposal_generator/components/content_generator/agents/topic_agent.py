@@ -12,36 +12,31 @@ class TopicAnalyzerAgent:
         self.progress_callback = progress_callback
 
     def analyze_topic(self, request: ContentRequest) -> Dict[str, Any]:
-        """
-        Analyze topic and generate content structure.
-        
-        Args:
-            request: Content generation request
-            
-        Returns:
-            Dict containing topic analysis and content structure
-        """
+        """Analyze topic and generate content structure."""
         try:
             if self.progress_callback:
                 self.progress_callback("Starting topic analysis...", 0)
             
             # Analyze requirements
-            requirements = self._analyze_requirements(request)
             if self.progress_callback:
-                self.progress_callback("Analyzing requirements...", 25)
+                self.progress_callback("Analyzing requirements...", 20)
+            requirements = self._analyze_requirements(request)
             
             # Generate structure
-            structure = self._generate_structure(request, requirements)
             if self.progress_callback:
-                self.progress_callback("Generating content structure...", 50)
+                self.progress_callback("Generating content structure...", 40)
+            structure = self._generate_structure(request, requirements)
             
             # Identify themes
-            themes = self._identify_themes(request)
             if self.progress_callback:
-                self.progress_callback("Identifying themes...", 75)
+                self.progress_callback("Identifying key themes...", 60)
+            themes = self._identify_themes(request)
             
             # Generate outline
+            if self.progress_callback:
+                self.progress_callback("Creating detailed outline...", 80)
             outline = self._generate_outline(structure, themes)
+            
             if self.progress_callback:
                 self.progress_callback("Topic analysis complete", 100)
             
@@ -188,43 +183,74 @@ class TopicAnalyzerAgent:
             logger.error(f"Error identifying themes: {str(e)}")
             return []
 
-    def _generate_outline(self, structure: Dict[str, Any], 
-                         themes: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Generate content outline."""
+    def _generate_outline(self, structure: Dict[str, Any], themes: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Generate detailed content outline."""
         try:
-            outline = {
+            # Define standard sections for a proposal
+            standard_sections = [
+                {
+                    'name': 'Executive Summary',
+                    'expected_content': 'Brief overview of the proposal and key benefits',
+                    'key_points': ['Project goals', 'Value proposition', 'Expected outcomes'],
+                    'target_length': 500
+                },
+                {
+                    'name': 'Project Overview',
+                    'expected_content': 'Detailed description of the project scope and objectives',
+                    'key_points': ['Current situation', 'Objectives', 'Success criteria'],
+                    'target_length': 800
+                },
+                {
+                    'name': 'Solution Details',
+                    'expected_content': 'Technical and functional specifications of the solution',
+                    'key_points': ['Features', 'Technology stack', 'Implementation approach'],
+                    'target_length': 1200
+                },
+                {
+                    'name': 'Implementation Plan',
+                    'expected_content': 'Step-by-step approach to implementing the solution',
+                    'key_points': ['Phases', 'Milestones', 'Resources'],
+                    'target_length': 1000
+                },
+                {
+                    'name': 'Timeline and Deliverables',
+                    'expected_content': 'Project schedule and key deliverables',
+                    'key_points': ['Timeline', 'Milestones', 'Deliverables'],
+                    'target_length': 800
+                },
+                {
+                    'name': 'Investment',
+                    'expected_content': 'Pricing, ROI, and payment terms',
+                    'key_points': ['Pricing structure', 'Payment schedule', 'ROI analysis'],
+                    'target_length': 700
+                }
+            ]
+
+            # Map themes to relevant sections
+            themes_by_section = {}
+            for section in standard_sections:
+                relevant_themes = [
+                    theme for theme in themes
+                    if self._is_theme_relevant_to_section(theme, section)
+                ]
+                themes_by_section[section['name']] = relevant_themes
+
+            return {
+                'sections': standard_sections,
+                'themes_by_section': themes_by_section,
+                'estimated_lengths': {
+                    section['name']: section['target_length']
+                    for section in standard_sections
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Error generating outline: {str(e)}")
+            return {
                 'sections': [],
                 'themes_by_section': {},
                 'estimated_lengths': {}
             }
-            
-            # Create outline for each section
-            for section in structure['sections']:
-                section_outline = {
-                    'name': section['name'],
-                    'subsections': self._generate_subsections(section, themes),
-                    'key_points': self._identify_section_key_points(section, themes),
-                    'expected_content': self._describe_expected_content(section)
-                }
-                outline['sections'].append(section_outline)
-                
-            # Map themes to sections
-            outline['themes_by_section'] = self._map_themes_to_sections(
-                outline['sections'],
-                themes
-            )
-            
-            # Estimate section lengths
-            outline['estimated_lengths'] = {
-                section['name']: section['expected_length']
-                for section in structure['sections']
-            }
-            
-            return outline
-            
-        except Exception as e:
-            logger.error(f"Error generating outline: {str(e)}")
-            return {'sections': [], 'themes_by_section': {}, 'estimated_lengths': {}}
 
     def _create_empty_analysis(self) -> Dict[str, Any]:
         """Create empty topic analysis."""
@@ -479,26 +505,24 @@ class TopicAnalyzerAgent:
         except Exception:
             return {}
 
-    def _is_theme_relevant_to_section(self, theme: Dict[str, Any], 
-                                    section: Dict[str, Any]) -> bool:
+    def _is_theme_relevant_to_section(self, theme: Dict[str, Any], section: Dict[str, Any]) -> bool:
         """Determine if a theme is relevant to a section."""
-        try:
-            # Check theme relevance score
-            if theme['relevance'] < 0.5:
-                return False
-                
-            # Check section-specific relevance
-            if section['name'] == 'executive_summary':
-                return theme['relevance'] > 0.8
-            elif section['name'] == 'problem_statement':
-                return theme['type'] == 'key_point'
-            elif section['name'] == 'proposed_solution':
-                return theme['type'] in ['key_point', 'keyword']
-                
-            return True
-            
-        except Exception:
-            return False
+        # Section-specific keywords
+        section_keywords = {
+            'Executive Summary': ['overview', 'summary', 'benefits', 'value', 'goals'],
+            'Project Overview': ['current', 'situation', 'objectives', 'scope', 'background'],
+            'Solution Details': ['features', 'technical', 'specifications', 'technology', 'functionality'],
+            'Implementation Plan': ['implementation', 'process', 'approach', 'methodology', 'steps'],
+            'Timeline and Deliverables': ['timeline', 'schedule', 'milestones', 'deliverables', 'dates'],
+            'Investment': ['pricing', 'cost', 'investment', 'roi', 'payment']
+        }
+
+        # Get keywords for this section
+        keywords = section_keywords.get(section['name'], [])
+        theme_name = theme['name'].lower()
+
+        # Check if theme matches any section keywords
+        return any(keyword in theme_name for keyword in keywords)
 
     def _determine_section_level(self, section_name: str) -> int:
         """Determine hierarchy level for a section."""

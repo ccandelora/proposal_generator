@@ -133,16 +133,28 @@ class SEOScreenshotter:
                     logger.error(f"Error closing driver: {str(e)}")
                 self.driver = None
 
-    async def capture_screenshots(self, urls):
+    async def capture_screenshots(self, urls: List[str]):
+        """Capture screenshots of websites."""
         if self.progress_callback:
-            self.progress_callback("Capturing screenshots...", 0)
-            
-        total_urls = len(urls)
-        for i, url in enumerate(urls):
-            # Existing screenshot logic...
-            if self.progress_callback:
-                progress = ((i + 1) / total_urls) * 100
-                self.progress_callback(f"Capturing screenshot {i+1}/{total_urls}", progress)
+            self.progress_callback("Initializing screenshot capture...", 0)
+        
+        try:
+            total_urls = len(urls)
+            for i, url in enumerate(urls, 1):
+                if self.progress_callback:
+                    progress = int((i / total_urls) * 90)
+                    self.progress_callback(f"Capturing screenshot {i}/{total_urls}: {url}", progress)
                 
-        if self.progress_callback:
-            self.progress_callback("Screenshots captured", 100)
+                # Capture screenshot logic...
+                
+            if self.progress_callback:
+                self.progress_callback("Processing screenshots...", 90)
+                
+            # Process screenshots...
+            
+            if self.progress_callback:
+                self.progress_callback("Screenshot capture complete", 100)
+                
+        except Exception as e:
+            if self.progress_callback:
+                self.progress_callback(f"Error capturing screenshots: {str(e)}", 0)

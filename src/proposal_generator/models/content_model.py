@@ -56,7 +56,6 @@ class GeneratedContent:
     """Generated content with metadata."""
     content_type: ContentType
     title: str
-    content: str
     sections: List[ContentSection]
     metadata: Dict[str, Any]
     metrics: Dict[str, Any]

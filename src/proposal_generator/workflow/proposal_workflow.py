@@ -7,6 +7,9 @@ from ..components.search.search_results_manager import SearchResultsManager
 from ..components.content_generator.agents.topic_agent import TopicAnalyzerAgent
 from ..components.content_generator.agents.writing_agent import WritingAgent
 from ..components.content_generator.agents.style_agent import StyleGuideAgent
+from ..components.seo_analyzer.agents.content_agent import ContentSEOAgent
+from ..components.seo_screenshotter.main import SEOScreenshotter
+from ..components.export_manager import ExportManager
 from ..models.content_model import ContentRequest, ContentType, ContentTone
 from ..utils.text_processor import clean_text, extract_sentences
 import re
@@ -46,18 +49,23 @@ class ProposalWorkflowManager:
         # Initialize workflow state
         self.current_stage = None
         self.completed_steps = []
+        self.overall_progress = 0
         
         # Initialize NLP
         try:
-            self.nlp = spacy.load("en_core_web_sm")
+            # Use medium-sized model with word vectors
+            self.nlp = spacy.load("en_core_web_md")
         except OSError:
             # If model is not installed, download it
             import subprocess
-            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
-            self.nlp = spacy.load("en_core_web_sm")
+            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_md"])
+            self.nlp = spacy.load("en_core_web_md")
         
         # Initialize components with progress tracking
-        self.search_client = GoogleSearchClient(config)
+        self.search_client = GoogleSearchClient(
+            config,
+            progress_callback=self._component_progress
+        )
         self.search_manager = SearchResultsManager(
             self.search_client, 
             progress_callback=self._component_progress
@@ -72,6 +80,20 @@ class ProposalWorkflowManager:
         )
         self.style_agent = StyleGuideAgent(
             progress_callback=self._agent_progress
+        )
+        
+        # Initialize SEO components
+        self.seo_agent = ContentSEOAgent(
+            progress_callback=self._component_progress
+        )
+        self.screenshotter = SEOScreenshotter(
+            progress_callback=self._component_progress
+        )
+        
+        # Initialize export manager
+        self.export_manager = ExportManager(
+            output_dir="exports",
+            progress_callback=self._component_progress
         )
 
     def _component_progress(self, component: str, message: str, progress: int):
@@ -110,7 +132,7 @@ class ProposalWorkflowManager:
             }
             stage_progress[stage] = progress
             
-            overall_progress = sum(
+            self.overall_progress = sum(
                 stage_progress[s] * weight 
                 for s, weight in stage_weights.items()
             )
@@ -119,9 +141,9 @@ class ProposalWorkflowManager:
             status = f"{stage}: {message}" if message else stage
             
             if self.web_tracker:
-                await self.web_tracker.update(status, overall_progress, self.completed_steps)
+                await self.web_tracker.update(status, self.overall_progress, self.completed_steps)
             elif self.terminal_visualizer:
-                self.terminal_visualizer.update(status, overall_progress, self.completed_steps)
+                self.terminal_visualizer.update(status, self.overall_progress, self.completed_steps)
 
     async def generate_proposal(self, topic: str, requirements: Dict[str, Any]) -> Dict[str, Any]:
         """Generate proposal based on topic and requirements."""
@@ -187,6 +209,7 @@ class ProposalWorkflowManager:
             # Generate search queries
             await self._update_progress(WorkflowStage.RESEARCH, 10, "Generating search queries...")
             queries = self._generate_search_queries(topic)
+            logger.info(f"Generated search queries: {queries}")  # Add logging
             all_results = []
             
             # Perform searches
@@ -199,17 +222,35 @@ class ProposalWorkflowManager:
                     f"Searching ({i}/{total_queries}): {query}"
                 )
                 
-                results = await self.search_manager.search_and_process(query, num_results=5)
-                all_results.extend([{
-                    'url': r.url,
-                    'title': r.title,
-                    'content': r.content,
-                    'relevance': r.relevance_score
-                } for r in results])
+                try:
+                    # Add more detailed logging
+                    logger.info(f"Executing search for query: {query}")
+                    results = await self.search_manager.search_and_process(query, num_results=5)
+                    logger.info(f"Found {len(results)} results for query: {query}")
+                    
+                    all_results.extend([{
+                        'url': r.url,
+                        'title': r.title,
+                        'content': r.content,
+                        'relevance': r.relevance_score
+                    } for r in results])
+                    
+                except Exception as e:
+                    logger.error(f"Error searching for query '{query}': {str(e)}")
+                    continue
             
             # Process and sort results
             await self._update_progress(WorkflowStage.RESEARCH, 90, "Processing search results...")
             all_results.sort(key=lambda x: x['relevance'], reverse=True)
+            
+            # Add result summary logging
+            logger.info(f"Research complete. Found {len(all_results)} total results")
+            if all_results:
+                logger.info("Top 3 most relevant results:")
+                for i, r in enumerate(all_results[:3], 1):
+                    logger.info(f"{i}. {r['title']} (relevance: {r['relevance']:.2f})")
+            else:
+                logger.warning("No research results found!")
             
             await self._update_progress(
                 WorkflowStage.RESEARCH, 
@@ -331,45 +372,70 @@ class ProposalWorkflowManager:
 
     def _extract_themes(self, research_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Extract themes from research results using NLP."""
-        themes = []
-        all_noun_phrases = []
-        
-        for result in research_results:
-            content = clean_text(result['content'])
-            doc = self.nlp(content)
+        try:
+            themes = []
+            all_noun_phrases = []
             
-            # Extract noun phrases
-            noun_phrases = [chunk.text.lower() for chunk in doc.noun_chunks 
-                          if len(chunk.text.split()) > 1]
-            all_noun_phrases.extend(noun_phrases)
+            for result in research_results:
+                try:
+                    content = clean_text(result.get('content', ''))
+                    if not content:
+                        continue
+                    
+                    doc = self.nlp(content[:10000])  # Limit content length to avoid memory issues
+                    
+                    # Extract noun phrases
+                    noun_phrases = [
+                        chunk.text.lower() for chunk in doc.noun_chunks 
+                        if len(chunk.text.split()) > 1 and len(chunk.text) < 100
+                    ]
+                    all_noun_phrases.extend(noun_phrases)
+                    
+                    # Extract named entities
+                    entities = [
+                        (ent.text, ent.label_) for ent in doc.ents 
+                        if ent.label_ in ['ORG', 'PRODUCT', 'GPE', 'TECH']
+                    ]
+                    
+                    # Analyze sentiment for context
+                    try:
+                        blob = TextBlob(content)
+                        sentiment = blob.sentiment.polarity
+                    except Exception as e:
+                        logger.warning(f"Error calculating sentiment: {str(e)}")
+                        sentiment = 0.0
+                    
+                    # Group related terms
+                    phrase_counter = Counter(noun_phrases)
+                    top_phrases = phrase_counter.most_common(5)
+                    
+                    for phrase, count in top_phrases:
+                        theme = {
+                            'name': phrase,
+                            'frequency': count,
+                            'sentiment': sentiment,
+                            'source_url': result.get('url', ''),
+                            'related_entities': [
+                                ent for ent, _ in entities 
+                                if phrase in ent.lower() or ent.lower() in phrase
+                            ],
+                            'relevance': self._calculate_theme_relevance(phrase, content)
+                        }
+                        themes.append(theme)
+                        
+                except Exception as e:
+                    logger.warning(f"Error processing result: {str(e)}")
+                    continue
             
-            # Extract named entities
-            entities = [(ent.text, ent.label_) for ent in doc.ents 
-                       if ent.label_ in ['ORG', 'PRODUCT', 'GPE', 'TECH']]
+            # Deduplicate and merge related themes
+            if themes:
+                merged_themes = self._merge_related_themes(themes)
+                return sorted(merged_themes, key=lambda x: x['relevance'], reverse=True)
+            return []
             
-            # Analyze sentiment for context
-            blob = TextBlob(content)
-            sentiment = blob.sentiment.polarity
-            
-            # Group related terms
-            phrase_counter = Counter(noun_phrases)
-            top_phrases = phrase_counter.most_common(5)
-            
-            for phrase, count in top_phrases:
-                theme = {
-                    'name': phrase,
-                    'frequency': count,
-                    'sentiment': sentiment,
-                    'source_url': result['url'],
-                    'related_entities': [ent for ent, _ in entities if 
-                                      phrase in ent.lower() or ent.lower() in phrase],
-                    'relevance': self._calculate_theme_relevance(phrase, content)
-                }
-                themes.append(theme)
-        
-        # Deduplicate and merge related themes
-        merged_themes = self._merge_related_themes(themes)
-        return sorted(merged_themes, key=lambda x: x['relevance'], reverse=True)
+        except Exception as e:
+            logger.error(f"Error extracting themes: {str(e)}")
+            return []
 
     def _extract_key_points(self, research_results: List[Dict[str, Any]]) -> List[str]:
         """Extract key points using NLP and heuristics."""
@@ -900,12 +966,22 @@ class ProposalWorkflowManager:
                 return True
             
             # Calculate similarity using spaCy
-            doc1 = self.nlp(theme1)
-            doc2 = self.nlp(theme2)
-            similarity = doc1.similarity(doc2)
-            
-            # Themes are considered related if similarity is above threshold
-            return similarity > 0.8
+            try:
+                doc1 = self.nlp(theme1)
+                doc2 = self.nlp(theme2)
+                if not doc1.vector_norm or not doc2.vector_norm:
+                    # Fall back to string matching if vectors aren't available
+                    return (
+                        len(set(theme1.lower().split()) & set(theme2.lower().split())) > 0
+                    )
+                similarity = doc1.similarity(doc2)
+                return similarity > 0.8
+            except Exception as e:
+                logger.warning(f"Error calculating similarity: {str(e)}")
+                # Fall back to basic string matching
+                return (
+                    len(set(theme1.lower().split()) & set(theme2.lower().split())) > 0
+                )
             
         except Exception as e:
             logger.error(f"Error comparing themes: {str(e)}")
@@ -956,3 +1032,17 @@ class ProposalWorkflowManager:
                         'confidence': self._calculate_confidence(sent)
                     })
         return opportunities
+
+    async def get_progress_state(self) -> Dict[str, Any]:
+        """Get current progress state."""
+        if self.web_tracker:
+            return await self.web_tracker.update(
+                self.current_stage or "",
+                self.overall_progress,
+                self.completed_steps
+            )
+        return {
+            'status': self.current_stage or "",
+            'progress': self.overall_progress,
+            'completed_steps': self.completed_steps
+        }

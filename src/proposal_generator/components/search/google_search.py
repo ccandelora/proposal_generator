@@ -13,10 +13,11 @@ logger = logging.getLogger(__name__)
 class GoogleSearchClient:
     """Client for performing Google searches with rate limiting and API support."""
     
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, progress_callback=None):
         """Initialize Google search client."""
         self.api_key = config.google_search_api_key
         self.custom_search_id = config.google_custom_search_id
+        self.progress_callback = progress_callback
         
         if not self.api_key or not self.custom_search_id:
             raise ValueError("Google Search API key and Custom Search ID are required")
@@ -34,82 +35,64 @@ class GoogleSearchClient:
     @sleep_and_retry
     @limits(calls=10, period=60)  # Rate limit: 10 calls per minute
     def search(self, query: str, num_results: int = 10) -> List[Dict[str, Any]]:
-        """Perform a Google search."""
+        """Perform Google search."""
         try:
-            logger.info(f"Executing Google search for: {query}")
+            if self.progress_callback:
+                self.progress_callback("Search", "Starting Google search...", 0)
+            
             results = []
             start_index = 1
             
             while len(results) < num_results:
-                # Execute search request
+                if self.progress_callback:
+                    progress = int((len(results) / num_results) * 90)  # 0-90%
+                    self.progress_callback("Search", f"Searching batch {start_index}...", progress)
+                
+                # Execute search
                 response = self.service.cse().list(
                     q=query,
                     cx=self.custom_search_id,
-                    num=min(10, num_results - len(results)),
                     start=start_index
                 ).execute()
                 
-                # Debug: Print raw response
-                logger.debug(f"Raw API response: {response}")
-                
-                if 'items' not in response:
-                    logger.warning("No items in search response")
-                    logger.debug(f"Response keys: {response.keys()}")
-                    break
-                
                 # Process results
-                for item in response['items']:
-                    # Debug: Print raw item
-                    logger.debug(f"Processing search result item: {item}")
-                    
-                    link = item.get('link')
-                    if not link:
-                        logger.warning(f"Missing URL in item: {item}")
-                        continue
-                        
-                    # Validate URL format
-                    if not (link.startswith('http://') or link.startswith('https://')):
-                        logger.warning(f"Invalid URL format: {link}")
-                        continue
-                    
-                    try:
+                if 'items' in response:
+                    for item in response['items']:
+                        if len(results) >= num_results:
+                            break
+                            
                         results.append({
-                            'url': link,
-                            'title': item.get('title', 'No Title'),
-                            'snippet': item.get('snippet', 'No Snippet'),
-                            'source': 'google_api',
+                            'url': item.get('link'),
+                            'title': item.get('title'),
+                            'snippet': item.get('snippet'),
                             'metadata': {
-                                'domain': item.get('displayLink', ''),
-                                'cached_page': item.get('cacheId', ''),
-                                'page_map': item.get('pagemap', {}),
-                                'mime_type': item.get('mime', 'text/html'),
-                                'file_format': item.get('fileFormat', ''),
-                                'language': item.get('language', 'en')
+                                'type': item.get('mime'),
+                                'date': item.get('pagemap', {}).get('metatags', [{}])[0].get('date'),
+                                'source': item.get('displayLink')
                             }
                         })
-                        logger.info(f"Successfully added result: {link}")
-                    except Exception as e:
-                        logger.error(f"Error processing item {link}: {str(e)}")
-                        continue
+                        
+                        if self.progress_callback:
+                            self.progress_callback(
+                                "Search", 
+                                f"Found result: {item.get('title')[:30]}...", 
+                                90 + int((len(results) / num_results) * 10)  # 90-100%
+                            )
                 
-                if len(response['items']) < 10:
+                if len(response.get('items', [])) < 10:
                     break
                     
                 start_index += 10
             
-            # Debug: Print final results
-            logger.info(f"Search completed. Found {len(results)} results:")
-            for i, result in enumerate(results, 1):
-                logger.info(f"{i}. URL: {result['url']}")
-                logger.info(f"   Title: {result['title']}")
+            if self.progress_callback:
+                self.progress_callback("Search", f"Found {len(results)} results", 100)
             
-            return results[:num_results]
-
-        except HttpError as e:
-            logger.error(f"Google API error: {str(e)}")
-            raise
+            return results
+            
         except Exception as e:
-            logger.error(f"Error performing Google search: {str(e)}")
+            logger.error(f"Error in Google search: {str(e)}")
+            if self.progress_callback:
+                self.progress_callback("Search", f"Error: {str(e)}", 0)
             raise
 
     def get_api_info(self) -> Dict[str, Any]:

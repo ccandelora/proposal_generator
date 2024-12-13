@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Proposal Generator</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
     <style>
         .form-container {
             max-width: 800px;
@@ -16,6 +17,61 @@
         .progress-container {
             display: none;
             margin-top: 2rem;
+        }
+        .proposal-content {
+            margin-top: 2rem;
+            padding: 2rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .proposal-content h1 {
+            color: #2c3e50;
+            margin-bottom: 1.5rem;
+        }
+        .proposal-content h2 {
+            color: #34495e;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+        .proposal-content pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: inherit;
+        }
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            z-index: 1000;
+        }
+        .loading-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .progress-status {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .completed-steps {
+            list-style: none;
+            padding: 0;
+            margin: 1rem 0;
+        }
+        .completed-steps li {
+            color: #28a745;
+            margin: 0.25rem 0;
+        }
+        .completed-steps li:before {
+            content: "✓";
+            margin-right: 0.5rem;
         }
     </style>
 </head>
@@ -71,14 +127,112 @@
                         <label class="form-check-label" for="ecommerce">E-commerce Functionality</label>
                     </div>
                 </div>
+                <div class="mb-3">
+                    <label class="form-label">Current Website Analytics (if available)</label>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <input type="number" class="form-control" name="monthly_visitors" placeholder="Monthly visitors">
+                        </div>
+                        <div class="col-md-6">
+                            <input type="number" class="form-control" name="bounce_rate" placeholder="Bounce rate (%)">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Target Market Details</label>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <input type="text" class="form-control" name="target_demographics" placeholder="Demographics (e.g., age range, location)">
+                        </div>
+                        <div class="col-md-6">
+                            <input type="text" class="form-control" name="target_interests" placeholder="Key interests/behaviors">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Business Goals</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="goals" value="lead_generation">
+                        <label class="form-check-label">Lead Generation</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="goals" value="brand_awareness">
+                        <label class="form-check-label">Brand Awareness</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="goals" value="sales">
+                        <label class="form-check-label">Online Sales</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="goals" value="customer_service">
+                        <label class="form-check-label">Customer Service</label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Current Pain Points</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="pain_points" value="slow_performance">
+                        <label class="form-check-label">Slow Website Performance</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="pain_points" value="poor_mobile">
+                        <label class="form-check-label">Poor Mobile Experience</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="pain_points" value="low_conversion">
+                        <label class="form-check-label">Low Conversion Rate</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="pain_points" value="outdated_design">
+                        <label class="form-check-label">Outdated Design</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="pain_points" value="poor_seo">
+                        <label class="form-check-label">Poor SEO Performance</label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Budget Range</label>
+                    <select class="form-select" name="budget_range">
+                        <option value="">Select budget range</option>
+                        <option value="5k-10k">$5,000 - $10,000</option>
+                        <option value="10k-20k">$10,000 - $20,000</option>
+                        <option value="20k-50k">$20,000 - $50,000</option>
+                        <option value="50k+">$50,000+</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Timeline Preference</label>
+                    <select class="form-select" name="timeline">
+                        <option value="">Select preferred timeline</option>
+                        <option value="asap">As soon as possible</option>
+                        <option value="1-2months">1-2 months</option>
+                        <option value="3-4months">3-4 months</option>
+                        <option value="flexible">Flexible</option>
+                    </select>
+                </div>
                 <button type="submit" class="btn btn-primary">Generate Proposal</button>
             </form>
             
-            <div id="progressContainer" class="progress-container">
-                <div class="progress mb-3">
-                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="loading-content">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div class="progress-status">
+                        <div id="status-text">Generating proposal...</div>
+                        <div class="progress mt-2">
+                            <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <div id="current-stage" class="mt-2"></div>
+                        <ul id="completed-steps" class="completed-steps"></ul>
+                    </div>
                 </div>
-                <div id="statusMessage" class="text-center"></div>
             </div>
             
             <div id="resultContainer" class="mt-4" style="display: none;">
@@ -90,65 +244,174 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        let progressInterval;
+
+        async function checkProgress() {
+            try {
+                const response = await fetch('/api/progress');
+                const data = await response.json();
+                
+                if (data.error) {
+                    clearInterval(progressInterval);
+                    document.getElementById('status-text').textContent = `Error: ${data.error}`;
+                    return;
+                }
+                
+                // Update progress bar
+                const progressBar = document.getElementById('progress-bar');
+                progressBar.style.width = `${data.progress}%`;
+                
+                // Update status
+                document.getElementById('status-text').textContent = data.status;
+                document.getElementById('current-stage').textContent = data.current_stage;
+                
+                // Update completed steps
+                const stepsHtml = data.completed_steps
+                    .map(step => `<li>${step}</li>`)
+                    .join('');
+                document.getElementById('completed-steps').innerHTML = stepsHtml;
+                
+                // If complete, stop checking
+                if (data.progress >= 100) {
+                    clearInterval(progressInterval);
+                }
+            } catch (error) {
+                console.error('Error checking progress:', error);
+            }
+        }
+
         document.getElementById('proposalForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            // Show progress container
-            document.getElementById('progressContainer').style.display = 'block';
+            // Show loading overlay
+            document.getElementById('loadingOverlay').style.display = 'flex';
             document.getElementById('resultContainer').style.display = 'none';
             
-            // Collect form data
-            const formData = new FormData(this);
-            const features = Array.from(formData.getAll('features'));
-            const competitors = formData.get('competitors')
-                .split('\n')
-                .map(url => url.trim())
-                .filter(url => url);
-            
-            // Create request payload
-            const payload = {
-                client_name: formData.get('client_name'),
-                business_name: formData.get('business_name'),
-                industry: formData.get('industry'),
-                target_market: formData.get('target_market'),
-                website: formData.get('website'),
-                competitors: competitors,
-                project_description: formData.get('project_description'),
-                requirements: {
-                    features: features
-                }
-            };
+            // Start progress checking
+            progressInterval = setInterval(checkProgress, 1000);
             
             try {
+                // Collect form data
+                const formData = new FormData(this);
+                const payload = {
+                    client_name: formData.get('client_name'),
+                    business_name: formData.get('business_name'),
+                    industry: formData.get('industry'),
+                    target_market: formData.get('target_market'),
+                    website: formData.get('website'),
+                    competitors: formData.get('competitors').split('\n').filter(url => url.trim()),
+                    project_description: formData.get('project_description'),
+                    requirements: {
+                        features: Array.from(formData.getAll('features')),
+                        goals: Array.from(formData.getAll('goals')),
+                        pain_points: Array.from(formData.getAll('pain_points'))
+                    },
+                    analytics: {
+                        monthly_visitors: parseInt(formData.get('monthly_visitors')) || 0,
+                        bounce_rate: parseInt(formData.get('bounce_rate')) || 0
+                    },
+                    target_details: {
+                        demographics: formData.get('target_demographics'),
+                        interests: formData.get('target_interests')
+                    },
+                    budget_range: formData.get('budget_range'),
+                    timeline: formData.get('timeline'),
+                    reference_data: {
+                        business_name: formData.get('business_name'),
+                        industry: formData.get('industry'),
+                        website: formData.get('website'),
+                        competitors: formData.get('competitors').split('\n').filter(url => url.trim()),
+                        project_description: formData.get('project_description'),
+                        features: Array.from(formData.getAll('features')),
+                        goals: Array.from(formData.getAll('goals')),
+                        pain_points: Array.from(formData.getAll('pain_points')),
+                        analytics: {
+                            monthly_visitors: parseInt(formData.get('monthly_visitors')) || 0,
+                            bounce_rate: parseInt(formData.get('bounce_rate')) || 0
+                        },
+                        target_demographics: formData.get('target_demographics'),
+                        target_interests: formData.get('target_interests'),
+                        budget_range: formData.get('budget_range'),
+                        timeline: formData.get('timeline')
+                    }
+                };
+                
                 // Send request
                 const response = await fetch('/generate', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
                 const result = await response.json();
                 
-                // Update progress bar to 100%
-                document.getElementById('progressBar').style.width = '100%';
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP error! status: ${response.status}`);
+                }
                 
-                // Display results
+                // Convert markdown to HTML
+                const converter = new showdown.Converter();
+                const htmlContent = converter.makeHtml(result.data.content);
+                
+                // Display the proposal with enhanced metrics
                 document.getElementById('resultContainer').style.display = 'block';
                 document.getElementById('proposalResult').innerHTML = `
                     <div class="alert alert-success">
                         <h4>Proposal Generated Successfully!</h4>
-                        <p>Workflow ID: ${result.workflow_id}</p>
-                        <p>Overall Progress: ${Math.round(result.progress.overall_progress * 100)}%</p>
-                        ${result.mockups ? '<p>Mockups Generated: Yes</p>' : ''}
-                        ${result.seo_insights ? '<p>SEO Analysis: Complete</p>' : ''}
-                        ${result.market_insights ? '<p>Market Analysis: Complete</p>' : ''}
-                        ${result.content_plan ? '<p>Content Plan: Complete</p>' : ''}
+                        <p>Generated at: ${result.timestamp}</p>
+                    </div>
+                    <div class="proposal-content">
+                        ${htmlContent}
+                    </div>
+                    <div class="metrics mt-4">
+                        <h5>Content Metrics:</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Content Quality</h6>
+                                <ul>
+                                    <li>Word Count: ${result.data.metadata.content_metrics.word_count || 0}</li>
+                                    <li>Readability Score: ${((result.data.metadata.content_metrics.readability_score || 0) * 100).toFixed(1)}%</li>
+                                    <li>Quality Score: ${((result.data.metadata.content_metrics.quality_score || 0) * 100).toFixed(1)}%</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>SEO Analysis</h6>
+                                <ul>
+                                    <li>Keyword Optimization: ${((result.data.metadata.content_metrics.seo_metrics?.keyword_optimization || 0) * 100).toFixed(1)}%</li>
+                                    <li>Technical Score: ${((result.data.metadata.content_metrics.technical_complexity || 0) * 100).toFixed(1)}%</li>
+                                    <li>Uniqueness Score: ${((result.data.metadata.content_metrics.uniqueness_score || 0) * 100).toFixed(1)}%</li>
+                                </ul>
+                            </div>
+                        </div>
+                        ${result.data.recommendations ? `
+                            <div class="mt-3">
+                                <h6>Key Recommendations:</h6>
+                                <ul>
+                                    ${result.data.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        ${result.data.metadata.content_metrics.roi_metrics ? `
+                            <div class="mt-3">
+                                <h6>ROI Projections:</h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h7>Traffic Growth</h7>
+                                        <ul>
+                                            <li>Organic Growth: ${result.data.metadata.content_metrics.roi_metrics.traffic_potential.organic_growth}</li>
+                                            <li>Mobile Traffic: ${result.data.metadata.content_metrics.roi_metrics.traffic_potential.mobile_traffic}</li>
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h7>Conversion Potential</h7>
+                                        <ul>
+                                            <li>Lead Generation: ${result.data.metadata.content_metrics.roi_metrics.conversion_potential.lead_generation}</li>
+                                            <li>Conversion Rate: ${result.data.metadata.content_metrics.roi_metrics.conversion_potential.conversion_rate}</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
                     </div>
                 `;
                 
@@ -161,6 +424,10 @@
                         <p>${error.message}</p>
                     </div>
                 `;
+            } finally {
+                // Hide loading overlay and stop progress checking
+                document.getElementById('loadingOverlay').style.display = 'none';
+                clearInterval(progressInterval);
             }
         });
     </script>
